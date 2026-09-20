@@ -1,9 +1,10 @@
 import { db } from '@/db/db'
 import { genSuccessData, genErrorData } from '@/app/api/utils/gen-res-data'
 import { resolveViewerId } from '@/lib/viewer-id'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
-export async function PATCH(_request: Request, { params }: { params: { publishId: string } }) {
-  const { publishId } = params
+export async function PATCH(_request: Request, { params }: { params: RouteParams<{ publishId: string }> }) {
+  const { publishId } = await resolveRouteParams(params)
 
   try {
     const { viewerId } = await resolveViewerId()

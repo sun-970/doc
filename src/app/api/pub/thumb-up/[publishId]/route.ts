@@ -1,13 +1,14 @@
 import { db } from '@/db/db'
 import { genSuccessData, genErrorData } from '@/app/api/utils/gen-res-data'
 import { resolveViewerId } from '@/lib/viewer-id'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && (error as { code: unknown }).code === 'P2002'
 }
 
-export async function GET(_request: Request, { params }: { params: { publishId: string } }) {
-  const { publishId } = params
+export async function GET(_request: Request, { params }: { params: RouteParams<{ publishId: string }> }) {
+  const { publishId } = await resolveRouteParams(params)
 
   try {
     const { viewerId } = await resolveViewerId()
@@ -24,8 +25,8 @@ export async function GET(_request: Request, { params }: { params: { publishId: 
   }
 }
 
-export async function PATCH(_request: Request, { params }: { params: { publishId: string } }) {
-  const { publishId } = params
+export async function PATCH(_request: Request, { params }: { params: RouteParams<{ publishId: string }> }) {
+  const { publishId } = await resolveRouteParams(params)
 
   try {
     const { viewerId } = await resolveViewerId()

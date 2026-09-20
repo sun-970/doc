@@ -3,16 +3,18 @@ import BottomBar from './bottom-bar'
 import WorkSidebar from './work-sidebar'
 import { getTranslations } from 'next-intl/server'
 import ResponsiveWorkspace from '@/components/responsive-workspace'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 export default async function Layout({
   params,
   children,
   directory, // parallel route
 }: Readonly<{
-  params: { id: string }
+  params: RouteParams<{ id: string }>
   children: React.ReactNode
   directory: React.ReactNode
 }>) {
+  await resolveRouteParams(params)
   const userInfoTrans = await getTranslations('userInfo')
   const commonTrans = await getTranslations('common')
 

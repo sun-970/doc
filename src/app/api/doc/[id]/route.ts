@@ -4,6 +4,7 @@ import { db } from '@/db/db'
 import { genSuccessData, genErrorData, genUnAuthData } from '@/app/api/utils/gen-res-data'
 import { sendEmail } from '@/lib/mailer'
 import { DOCUMENT_ACCESS, resolveDocumentAccess } from '@/lib/document-access'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const updateDocSchema = z
   .object({
@@ -14,11 +15,11 @@ const updateDocSchema = z
   .strict()
 
 // 获取单个 doc 内容
-export async function GET(request: Request, { params }: { params: { id: string } }) {
+export async function GET(request: Request, { params }: { params: RouteParams<{ id: string }> }) {
   const user = await getUserInfo()
   if (user == null) return Response.json(genUnAuthData())
 
-  const { id } = params
+  const { id } = await resolveRouteParams(params)
 
   try {
     const doc = await db.doc.findFirst({
@@ -61,11 +62,11 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 // 更新单个 doc 内容
-export async function PATCH(request: Request, { params }: { params: { id: string } }) {
+export async function PATCH(request: Request, { params }: { params: RouteParams<{ id: string }> }) {
   const user = await getUserInfo()
   if (user == null) return Response.json(genUnAuthData())
 
-  const { id } = params
+  const { id } = await resolveRouteParams(params)
   const parsed = updateDocSchema.safeParse(await request.json().catch(() => null))
   if (!parsed.success) return Response.json(genErrorData('Update payload invalid'))
   try {

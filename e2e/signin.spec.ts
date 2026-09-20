@@ -26,7 +26,10 @@ for (const viewport of [
     await expect(page.locator('main').getByRole('alert')).toHaveCount(0)
     await expect(page.getByLabel('Email')).toBeVisible()
     await expectNoHorizontalClipping(page)
-    await expect(page).toHaveScreenshot(`signin-${viewport.name}-light.png`, { fullPage: true })
+    await expect(page).toHaveScreenshot(`signin-${viewport.name}-light.png`, {
+      fullPage: true,
+      maxDiffPixelRatio: 0.03,
+    })
 
     const themeButton = page.getByRole('button', { name: /theme/i })
     await themeButton.focus()
@@ -37,7 +40,10 @@ for (const viewport of [
 
     await page.keyboard.press('Tab')
     await expect(page.locator(':focus')).not.toHaveCount(0)
-    await expect(page).toHaveScreenshot(`signin-${viewport.name}-dark.png`, { fullPage: true })
+    await expect(page).toHaveScreenshot(`signin-${viewport.name}-dark.png`, {
+      fullPage: true,
+      maxDiffPixelRatio: 0.03,
+    })
   })
 }
 

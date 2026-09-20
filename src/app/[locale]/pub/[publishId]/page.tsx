@@ -7,9 +7,10 @@ import ThumbUpButton from '@/components/thumb-up-button'
 import Footer from '@/components/footer'
 import PubDocContent from '@/components/pub-doc-content'
 import { PUB_DOC_STATUS } from '@/lib/pub-doc-status'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
-export async function generateMetadata({ params }: { params: { publishId: string } }) {
-  const { publishId } = params
+export async function generateMetadata({ params }: { params: RouteParams<{ publishId: string }> }) {
+  const { publishId } = await resolveRouteParams(params)
 
   const pubDocTitle = await getPubDocTitle(publishId)
   if (pubDocTitle == null) {
@@ -22,8 +23,8 @@ export async function generateMetadata({ params }: { params: { publishId: string
   }
 }
 
-export default async function PubDocPage({ params }: { params: { publishId: string } }) {
-  const { publishId } = params
+export default async function PubDocPage({ params }: { params: RouteParams<{ publishId: string }> }) {
+  const { publishId } = await resolveRouteParams(params)
 
   const pubDoc = await getPubDoc(publishId)
   const user = pubDoc?.user

@@ -1,10 +1,9 @@
 @import '@fullstack-ai-infra/ui/styles.css';
+@import './editor.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import './editor.css';
 
 @layer base {
   * {

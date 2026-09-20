@@ -6,6 +6,7 @@ const withNextIntl = createNextIntlPlugin()
 const nextConfig = {
   reactStrictMode: true,
   output: 'standalone',
+  serverExternalPackages: ['ali-oss', 'urllib', 'proxy-agent'],
 }
 
 export default withNextIntl(nextConfig)

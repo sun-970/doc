@@ -6,6 +6,7 @@ import { PUB_DOC_STATUS } from '@/lib/pub-doc-status'
 import { DOCUMENT_ACCESS, getDocumentAccess } from '@/lib/document-access'
 import { MAX_PUBLISHED_HTML_BYTES, sanitizePublishedHtml } from '@/lib/sanitize-published-html'
 import { readJsonBody } from '@/lib/read-json-body'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
 const updatePublicationSchema = z
   .object({
@@ -17,11 +18,11 @@ const updatePublicationSchema = z
 
 const MAX_PUBLICATION_REQUEST_BYTES = MAX_PUBLISHED_HTML_BYTES * 2 + 64 * 1024
 
-export async function GET(request: Request, { params }: { params: { publishId: string } }) {
+export async function GET(request: Request, { params }: { params: RouteParams<{ publishId: string }> }) {
   const user = await getUserInfo()
   if (user == null) return Response.json(genUnAuthData())
 
-  const { publishId } = params // `publishId` is publish url suffix
+  const { publishId } = await resolveRouteParams(params) // `publishId` is publish url suffix
   const p = await db.pubDoc.findUnique({
     where: {
       publishId,
@@ -52,11 +53,11 @@ export async function GET(request: Request, { params }: { params: { publishId: s
 }
 
 // 更新发布内容
-export async function PATCH(request: Request, { params }: { params: { publishId: string } }) {
+export async function PATCH(request: Request, { params }: { params: RouteParams<{ publishId: string }> }) {
   const user = await getUserInfo()
   if (user == null) return Response.json(genUnAuthData())
 
-  const { publishId } = params // `publishId` is publish url suffix
+  const { publishId } = await resolveRouteParams(params) // `publishId` is publish url suffix
   const parsed = updatePublicationSchema.safeParse(
     await readJsonBody(request, MAX_PUBLICATION_REQUEST_BYTES).catch(() => null)
   )
@@ -116,11 +117,11 @@ export async function PATCH(request: Request, { params }: { params: { publishId:
 }
 
 // 删除发布内容
-export async function DELETE(request: Request, { params }: { params: { publishId: string } }) {
+export async function DELETE(request: Request, { params }: { params: RouteParams<{ publishId: string }> }) {
   const user = await getUserInfo()
   if (user == null) return Response.json(genUnAuthData())
 
-  const { publishId } = params
+  const { publishId } = await resolveRouteParams(params)
   try {
     const current = await db.pubDoc.findUnique({
       where: {

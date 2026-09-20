@@ -1,11 +1,12 @@
 import { useTranslations } from 'next-intl'
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 export default function Logo(props: { size?: 'small' | 'large' }) {
   const { size = 'small' } = props
   const t = useTranslations('common')
   return (
-    <a href="/" className="inline-flex items-center gap-2" aria-label={t('brandName')} role="logo">
+    <Link href="/" className="inline-flex items-center gap-2" aria-label={t('brandName')} role="logo">
       <svg
         width={size === 'large' ? 28 : 22}
         height={size === 'large' ? 28 : 22}
@@ -27,6 +28,6 @@ export default function Logo(props: { size?: 'small' | 'large' }) {
       <span className={cn('font-semibold tracking-tight text-foreground', size === 'large' ? 'text-lg' : 'text-sm')}>
         {t('brandName')}
       </span>
-    </a>
+    </Link>
   )
 }

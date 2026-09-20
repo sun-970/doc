@@ -109,7 +109,7 @@ function TrashTable() {
   }
 
   const matchingDocs = list.filter((doc) => doc.title.includes(keyword))
-  let content: JSX.Element
+  let content: React.ReactNode
 
   if (loading) {
     content = (

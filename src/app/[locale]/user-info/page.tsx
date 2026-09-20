@@ -5,8 +5,10 @@ import PersonalAccessTokenManager from '@/components/personal-access-token-manag
 import { UserProfileForm } from '@/components/user-profile-form'
 import { getUserInfo } from '@/lib/session'
 import { getTranslations } from 'next-intl/server'
+import { resolveRouteParams, type RouteParams } from '@/lib/route-params'
 
-export default async function UserTestPage({ params }: { params: { locale: string } }) {
+export default async function UserTestPage({ params }: { params: RouteParams<{ locale: string }> }) {
+  const { locale } = await resolveRouteParams(params)
   const user = await getUserInfo()
   const t = await getTranslations('userInfo')
 
@@ -43,7 +45,7 @@ export default async function UserTestPage({ params }: { params: { locale: strin
             name={user.name || ''}
             avatar={user.image || ''}
             email={user.email || ''}
-            redirectTo={`/${params.locale}/work`}
+            redirectTo={`/${locale}/work`}
           />
         </section>
         <PersonalAccessTokenManager />

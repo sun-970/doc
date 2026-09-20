@@ -99,8 +99,8 @@ export function useDirectoryDragItem(options: {
   id: string
   docs: IDoc[]
   enabled: boolean
-  rowRef: RefObject<HTMLDivElement>
-  handleRef: RefObject<HTMLDivElement>
+  rowRef: RefObject<HTMLDivElement | null>
+  handleRef: RefObject<HTMLDivElement | null>
   hasChildren: boolean
   expanded: boolean
   expand: () => void
