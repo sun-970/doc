@@ -135,7 +135,10 @@
     "unavailable": "No sign-in method is configured. Ask the instance operator to configure one.",
     "emailSubTitle": "Sign in with a secure link sent to your email.",
     "githubSubTitle": "Sign in with your GitHub account.",
-    "signInSubtitle": "Sign in to your workspace."
+    "signInSubtitle": "Sign in to your workspace.",
+    "localHint": "Local development: open Mailpit at {url} to follow the magic link. The email link remains the sign-in authority.",
+    "openMailpit": "Open Mailpit",
+    "openMagicLink": "Open the latest sign-in link"
   },
   "verifyRequest": {
     "title": "Check your email",

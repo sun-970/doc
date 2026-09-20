@@ -56,6 +56,12 @@ checkout has a zero-credential authentication path; do not treat it as a product
 template. Production deployments should define their own topology and use an external SMTP or
 identity provider instead of Mailpit.
 
+Outside production, the verify-request page (after submitting an email) shows a
+loopback Mailpit hint (default `http://localhost:8025`, overridable with
+`DOC_MAILPIT_URL`) and can surface the newest magic link from Mailpit. This is
+guidance only: the emailed link remains the authority. The hint is disabled in
+production and when `DOC_LOCAL_AUTH_HINT=0`.
+
 Complete the first-document loop:
 
 1. Open <http://localhost:3100> and enter any valid email address.

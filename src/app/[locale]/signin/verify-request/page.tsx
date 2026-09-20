@@ -1,9 +1,19 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import HomeNav from '@/components/home-nav'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import LocalSignInHint from '@/components/local-sign-in-hint'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useTranslations } from 'next-intl'
 
 export default function VerifyRequestPage() {
   const t = useTranslations('verifyRequest')
+  const [email, setEmail] = useState('')
+
+  useEffect(() => {
+    const value = new URLSearchParams(window.location.search).get('email')
+    if (value) setEmail(value)
+  }, [])
 
   return (
     <main className="doc-grid flex min-h-screen items-center justify-center bg-canvas px-4 py-16">
@@ -14,6 +24,9 @@ export default function VerifyRequestPage() {
           <CardTitle className="text-2xl">{t('title')}</CardTitle>
           <CardDescription>{t('subTitle')}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <LocalSignInHint email={email} />
+        </CardContent>
       </Card>
     </main>
   )
