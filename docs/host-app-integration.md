@@ -1,8 +1,8 @@
 # Host app integration guide
 
-Host applications that embed `doc` as a read-only knowledge source (e.g. RoleWeave Memory &
-Collaboration panel) consume documents through the API v1 list endpoint. This guide describes
-how to use the search, time range, and sort parameters effectively.
+Host applications that embed `doc` (e.g. RoleWeave Memory & Collaboration panel) consume
+documents through API v1. This guide covers list/search plus content replace and the change
+stream so a host preview can edit and stay live.
 
 ## Base endpoint
 
@@ -100,14 +100,49 @@ GET /api/doc?keyword=runbook&after=2026-09-01&sort=updated_desc
 This endpoint uses the browser session cookie for authentication and is not intended for host app
 integration — use API v1 with a PAT instead.
 
+## Editing existing documents
+
+The Memory & Collaboration panel (and any other host) can replace an existing body without joining
+the Web workbench:
+
+```http
+PUT /api/v1/documents/{id}/content
+Authorization: Bearer doc_pat_...
+Content-Type: application/json
+```
+
+```json
+{
+  "content": { "type": "doc", "content": [{ "type": "paragraph", "content": [{ "type": "text", "text": "…" }] }] },
+  "baseVersion": "etag-from-get"
+}
+```
+
+`documents:write` is required. Send the `ETag` from `GET /api/v1/documents/{id}` as `baseVersion`
+(or `*` to force). A live collaboration room is updated in place; if nobody is editing in the
+browser, the write still persists. Stale `baseVersion` returns `409 version_conflict`.
+
+To refresh an open preview without polling in a loop, open:
+
+```http
+GET /api/v1/documents/{id}/events
+Authorization: Bearer doc_pat_...
+```
+
+The stream is `text/event-stream`. Handle `document.snapshot` then `document.updated`. On
+`document.updated`, re-fetch `GET /api/v1/documents/{id}` (or apply the new etag you already
+hold) so **更新于** is not a static snapshot. Requires `documents:read`.
+
 ## Error handling
 
-| Status | Code                 | Meaning                                       |
-| ------ | -------------------- | --------------------------------------------- |
-| 400    | `invalid_query`      | Invalid `after`/`before` date or `sort` value |
-| 400    | `invalid_cursor`     | Cursor used with `created_*` sort             |
-| 401    | `unauthorized`       | Missing or invalid PAT                        |
-| 403    | `insufficient_scope` | Token lacks `documents:read`                  |
+| Status | Code                        | Meaning                                               |
+| ------ | --------------------------- | ----------------------------------------------------- |
+| 400    | `invalid_query`             | Invalid `after`/`before` date or `sort` value         |
+| 400    | `invalid_cursor`            | Cursor used with `created_*` sort                     |
+| 401    | `unauthorized`              | Missing or invalid PAT                                |
+| 403    | `insufficient_scope`        | Token lacks `documents:read`                          |
+| 409    | `version_conflict`          | `baseVersion` does not match the current ETag         |
+| 503    | `collaboration_unavailable` | Live-room replace failed for a reason other than idle |
 
 ## Testing the date range filter
 

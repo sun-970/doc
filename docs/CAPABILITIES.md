@@ -81,15 +81,15 @@ Primary implementation paths:
 
 ## Identity, governance, and product surface
 
-| Capability             | Status       | Current implementation                                                                                                                                                     |
-| ---------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authentication         | available    | GitHub OAuth, email sign-in, and scoped personal access tokens with expiry, revocation, and one-time secret display                                                        |
-| Document API v1        | available    | Bearer-only token inspection, owner listing with content search, time range filters, sort options, authorized reads, canonical creation, and ETag-guarded metadata updates |
-| Document authorization | experimental | Browser routes, API v1, publication, and collaboration entry points enforce persisted ownership and READ/WRITE relations                                                   |
-| User settings          | available    | User name and avatar                                                                                                                                                       |
-| Admin governance       | available    | Overview, user/admin management, document filtering, restore/delete, and publication moderation                                                                            |
-| Localization and theme | available    | Chinese/English plus dark, light, and system themes                                                                                                                        |
-| Object storage         | experimental | Uploads use the current Ali OSS client; a provider-neutral S3 interface is not implemented                                                                                 |
+| Capability             | Status       | Current implementation                                                                                                                                                                                                                                                                        |
+| ---------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication         | available    | GitHub OAuth, email sign-in, and scoped personal access tokens with expiry, revocation, and one-time secret display                                                                                                                                                                           |
+| Document API v1        | available    | Bearer-only token inspection, owner listing with content search, time range filters, sort options, authorized reads, canonical creation, ETag-guarded metadata updates, collaboration-aware content replacement (live Yjs room or idle persist), and an in-process document-change SSE stream |
+| Document authorization | experimental | Browser routes, API v1, publication, and collaboration entry points enforce persisted ownership and READ/WRITE relations                                                                                                                                                                      |
+| User settings          | available    | User name and avatar                                                                                                                                                                                                                                                                          |
+| Admin governance       | available    | Overview, user/admin management, document filtering, restore/delete, and publication moderation                                                                                                                                                                                               |
+| Localization and theme | available    | Chinese/English plus dark, light, and system themes                                                                                                                                                                                                                                           |
+| Object storage         | experimental | Uploads use the current Ali OSS client; a provider-neutral S3 interface is not implemented                                                                                                                                                                                                    |
 
 Primary implementation paths:
 
@@ -116,15 +116,15 @@ See [CLI.md](CLI.md) for the command contract.
 
 The following capabilities are not claimed:
 
-- Collaboration-aware replacement of existing document content through API v1
-- API/CLI delete, restore, version restore, publish, import, or export
+- API/CLI delete, restore, version restore, publish, import, or export as a complete remote contract
 - Complete like/unlike persistence, user-level deduplication, and abuse controls
 - Provider-neutral object storage
 - Reviewed production Prisma migrations
 - Closure of the current framework, authentication, mail, and CSS toolchain security audit findings
 - Browser-level IndexedDB disconnect/reconnect and access-regrant recovery coverage
 - Complete audit events, rate limits, metrics, tracing, and structured logs
+- Cross-process document-change fan-out (SSE currently notifies subscribers on the instance that accepted the write)
 
-The first remote CLI surface intentionally uses API v1 rather than direct Prisma writes. Content
-replacement remains deferred until it can pass through an active-room-aware Yjs mutation gateway
-without bypassing version and restore semantics.
+The first remote CLI surface uses API v1 rather than direct Prisma writes. Content replacement
+goes through the live Yjs room when one exists, and otherwise persists JSON plus Yjs binary on
+the document row after taking a version snapshot.

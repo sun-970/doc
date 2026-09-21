@@ -9,6 +9,7 @@ vi.mock('@/db/db', () => ({
     },
     docVersion: {
       create: vi.fn(),
+      delete: vi.fn(),
       findFirst: vi.fn(),
       findMany: vi.fn(),
     },
@@ -24,6 +25,7 @@ vi.mock('@/lib/tiptap-codec', () => ({
 }))
 
 import { db } from '@/db/db'
+import { subscribeDocumentChanges } from '@/lib/document-change-hub'
 import {
   mutateDocumentContent,
   listDocumentVersions,
@@ -141,6 +143,101 @@ describe('api-v1-mutations', () => {
       expect(result.documentId).toBe('doc-1')
       expect(result.versionId).toBe('snap-1')
       expect(result.operationId).toContain('mutate:doc-1:')
+    })
+
+    it('persists JSON and Yjs binary when no collaboration room is active', async () => {
+      const mockCollabMutate = vi.fn().mockRejectedValue(new Error('Active document not found'))
+      const updatedAt = new Date('2026-01-01T00:00:02Z')
+      mockDb.doc.findFirst
+        .mockResolvedValueOnce({
+          id: 'doc-1',
+          title: 'Test',
+          content: '{}',
+          contentBinary: Buffer.from('old'),
+          updatedAt: new Date('2026-01-01T00:00:00Z'),
+        } as any)
+        .mockResolvedValueOnce({
+          updatedAt,
+        } as any)
+      mockDb.docVersion.create.mockResolvedValue({ id: 'snap-idle' } as any)
+      mockDb.doc.update.mockResolvedValue({} as any)
+
+      const result = await mutateDocumentContent(
+        'user-1',
+        'doc-1',
+        { content: { type: 'doc', content: [] }, baseVersion: '*' },
+        { callCollabMutate: mockCollabMutate }
+      )
+
+      expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String))
+      expect(mockDb.doc.update).toHaveBeenCalledWith({
+        where: { id: 'doc-1' },
+        data: expect.objectContaining({
+          content: expect.any(String),
+          contentBinary: expect.any(Buffer),
+        }),
+      })
+      expect(mockDb.docVersion.delete).not.toHaveBeenCalled()
+      expect(result.versionId).toBe('snap-idle')
+      expect(result.etag).toMatch(/^"doc:doc-1:/)
+    })
+
+    it('publishes a document change after a successful collaboration mutation', async () => {
+      const onChange = vi.fn()
+      const off = subscribeDocumentChanges('doc-1', onChange)
+      const mockCollabMutate = vi.fn().mockResolvedValue(undefined)
+      mockDb.doc.findFirst
+        .mockResolvedValueOnce({
+          id: 'doc-1',
+          title: 'Test',
+          content: '{}',
+          contentBinary: Buffer.from('old'),
+          updatedAt: new Date('2026-01-01T00:00:00Z'),
+        } as any)
+        .mockResolvedValueOnce({
+          updatedAt: new Date('2026-01-01T00:00:03Z'),
+        } as any)
+      mockDb.docVersion.create.mockResolvedValue({ id: 'snap-pub' } as any)
+
+      await mutateDocumentContent(
+        'user-1',
+        'doc-1',
+        { content: { type: 'doc', content: [] }, baseVersion: '*' },
+        { callCollabMutate: mockCollabMutate }
+      )
+
+      expect(onChange).toHaveBeenCalledWith(
+        expect.objectContaining({
+          documentId: 'doc-1',
+          etag: expect.stringMatching(/^"doc:doc-1:/),
+        })
+      )
+      off()
+    })
+
+    it('does not leave an orphan version snapshot when collaboration mutation fails', async () => {
+      const mockCollabMutate = vi.fn().mockRejectedValue(new Error('collaboration mutation failed'))
+      mockDb.doc.findFirst.mockResolvedValue({
+        id: 'doc-1',
+        title: 'Test',
+        content: '{}',
+        contentBinary: Buffer.from('old'),
+        updatedAt: new Date('2026-01-01T00:00:00Z'),
+      } as any)
+      mockDb.docVersion.create.mockResolvedValue({ id: 'snap-fail' } as any)
+      mockDb.docVersion.delete.mockResolvedValue({} as any)
+
+      await expect(
+        mutateDocumentContent(
+          'user-1',
+          'doc-1',
+          { content: { type: 'doc', content: [] }, baseVersion: '*' },
+          { callCollabMutate: mockCollabMutate }
+        )
+      ).rejects.toMatchObject({ status: 503, code: 'collaboration_unavailable' })
+
+      expect(mockDb.doc.update).not.toHaveBeenCalled()
+      expect(mockDb.docVersion.delete).toHaveBeenCalledWith({ where: { id: 'snap-fail' } })
     })
 
     it('idempotent retry does not duplicate mutation', async () => {

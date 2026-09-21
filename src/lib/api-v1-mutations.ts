@@ -3,7 +3,9 @@ import 'server-only'
 import { createHash, randomUUID } from 'node:crypto'
 import { db } from '@/db/db'
 import { ApiV1Error } from '@/lib/api-v1'
+import { publishDocumentChange } from '@/lib/document-change-hub'
 import { encodeTiptapDocument } from '@/lib/tiptap-codec'
+import { extractPlainText } from '@/lib/tiptap-text-extractor'
 import { z } from 'zod'
 
 // --- Schemas ---
@@ -71,6 +73,26 @@ async function callCollabMutateDefault(docId: string, contentBinaryBase64: strin
   if (!res.ok || data.success === false) {
     throw new Error(data.msg || 'collaboration mutation failed')
   }
+}
+
+function isInactiveCollabRoom(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /active document not found/i.test(message)
+}
+
+async function persistIdleDocument(
+  docId: string,
+  encoded: { content: unknown; contentJson: string; contentBinary: Buffer }
+) {
+  const contentSearch = extractPlainText(encoded.content)
+  await db.doc.update({
+    where: { id: docId },
+    data: {
+      content: encoded.contentJson,
+      contentBinary: encoded.contentBinary,
+      contentSearch: contentSearch || null,
+    },
+  })
 }
 
 // --- Idempotency ---
@@ -164,10 +186,24 @@ export async function mutateDocumentContent(
     select: { id: true },
   })
 
-  // Send mutation through the collaboration authority (active room)
+  // Prefer the live Yjs room. If nobody is connected, persist JSON + binary
+  // through the same document row the collab service writes on idle.
   const collabMutate = deps.callCollabMutate || callCollabMutateDefault
   const contentBinaryBase64 = encoded.contentBinary.toString('base64')
-  await collabMutate(docId, contentBinaryBase64)
+  try {
+    await collabMutate(docId, contentBinaryBase64)
+  } catch (error) {
+    if (isInactiveCollabRoom(error)) {
+      await persistIdleDocument(docId, encoded)
+    } else {
+      await db.docVersion.delete({ where: { id: snapshot.id } }).catch(() => undefined)
+      throw new ApiV1Error(
+        503,
+        'collaboration_unavailable',
+        'The collaboration service could not apply the content replacement'
+      )
+    }
+  }
 
   // Fetch updated document for etag
   const updated = await db.doc.findFirst({
@@ -183,6 +219,12 @@ export async function mutateDocumentContent(
     etag: newEtag,
     operationId,
   }
+
+  publishDocumentChange(docId, {
+    documentId: docId,
+    etag: newEtag,
+    updatedAt: (updated?.updatedAt ?? new Date()).toISOString(),
+  })
 
   if (idempotencyKey) setIdempotentResult(idempotencyKey, result)
   return result
