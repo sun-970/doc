@@ -4,7 +4,7 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 
 import { applyContentBinary } from '../hocuspocus/restore.js'
 import { errorMessage } from '../lib/error.js'
-import { notifyWebDocumentChangeBestEffort } from '../lib/notify-web-document-change.js'
+import { notifyWebDocumentChange } from '../lib/notify-web-document-change.js'
 
 export const MAX_ACCESS_REQUEST_BYTES = 4 * 1024
 
@@ -104,7 +104,7 @@ export function createCollabRouter(deps: CollabRouterDeps): Router {
       if (body == null) throw new Error('contentBinaryBase64 is required')
 
       const applied = await applyContentBinary(docId, body.contentBinaryBase64)
-      notifyWebDocumentChangeBestEffort(docId)
+      await notifyWebDocumentChange(docId)
       ctx.body = { success: true, data: { docId, appliedToRoom: applied.appliedToRoom } }
     } catch (error) {
       ctx.status = 400

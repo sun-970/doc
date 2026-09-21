@@ -268,8 +268,11 @@ GET /api/v1/documents/{id}/events
 Requires `documents:read`. The response is `text/event-stream`. The first event is
 `document.snapshot` with the current `etag` and `updatedAt`. Later `document.updated` events fire
 when this Web/API process learns of a content change: a successful `PUT` (CLI/API), or a
-Hocuspocus `onStoreDocument` / restore that notifies `POST /api/internal/document-changes`
-(`DOC_WEB_INTERNAL_URL` + internal key). Heartbeats are comment lines.
+Hocuspocus `onStoreDocument` / restore that notifies `POST /api/internal/document-changes`.
+Collaboration requires `DOC_WEB_INTERNAL_URL` and sends
+`COLLABORATE_INTERNAL_API_KEY` or `INTERNAL_API_KEY` (same secret the Web process
+accepts). Notify is fail-closed: missing URL/key or a non-2xx response fails the store/restore.
+Heartbeats are comment lines.
 
 ```
 event: document.snapshot
