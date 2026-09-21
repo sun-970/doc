@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as Y from 'yjs'
 
 import {
+  applyContentBinary,
   createTargetYdocFromBinary,
   restoreActiveDocument,
   serializeYdocToJsonString,
@@ -166,5 +167,31 @@ describe('multi-client collaboration recovery', () => {
     expect(Buffer.from(Y.encodeStateAsUpdate(client))).toEqual(Buffer.from(clientBefore))
     expect(active.getXmlFragment('default').toString()).toContain('current')
     expect(updateObserver).not.toHaveBeenCalled()
+  })
+
+  it('idle apply persists through the collab kernel without requiring a live room', async () => {
+    const target = paragraphDoc('idle-body')
+    const persistRestoredDocument = vi.fn(async () => 1)
+    const result = await applyContentBinary('doc-idle', Buffer.from(Y.encodeStateAsUpdate(target)).toString('base64'), {
+      getActiveDocument: () => null,
+      persistRestoredDocument,
+    })
+    expect(result.appliedToRoom).toBe(false)
+    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-idle', result.contentBinary, result.content)
+  })
+
+  it('idle apply also replaces a room that appears after persist', async () => {
+    const active = paragraphDoc('stale')
+    const target = paragraphDoc('fresh')
+    let persistDone = false
+    const result = await applyContentBinary('doc-race', Buffer.from(Y.encodeStateAsUpdate(target)).toString('base64'), {
+      getActiveDocument: () => (persistDone ? active : null),
+      persistRestoredDocument: async () => {
+        persistDone = true
+        return 1
+      },
+    })
+    expect(result.appliedToRoom).toBe(true)
+    expect(active.getXmlFragment('default').toString()).toContain('fresh')
   })
 })

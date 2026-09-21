@@ -24,6 +24,7 @@ vi.mock('@/lib/tiptap-codec', () => ({
   EMPTY_TIPTAP_DOCUMENT: { type: 'doc', content: [] },
 }))
 
+import { computeDocEtag } from '@/lib/document-etag'
 import { db } from '@/db/db'
 import { subscribeDocumentChanges } from '@/lib/document-change-hub'
 import {
@@ -145,22 +146,22 @@ describe('api-v1-mutations', () => {
       expect(result.operationId).toContain('mutate:doc-1:')
     })
 
-    it('persists JSON and Yjs binary when no collaboration room is active', async () => {
-      const mockCollabMutate = vi.fn().mockRejectedValue(new Error('Active document not found'))
-      const updatedAt = new Date('2026-01-01T00:00:02Z')
+    it('does not write Doc.content from the API process; idle persist stays in collab', async () => {
+      const mockCollabMutate = vi.fn().mockResolvedValue(undefined)
+      const before = new Date('2026-01-01T00:00:00Z')
+      const after = new Date('2026-01-01T00:00:02Z')
       mockDb.doc.findFirst
         .mockResolvedValueOnce({
           id: 'doc-1',
           title: 'Test',
           content: '{}',
           contentBinary: Buffer.from('old'),
-          updatedAt: new Date('2026-01-01T00:00:00Z'),
+          updatedAt: before,
         } as any)
         .mockResolvedValueOnce({
-          updatedAt,
+          updatedAt: after,
         } as any)
       mockDb.docVersion.create.mockResolvedValue({ id: 'snap-idle' } as any)
-      mockDb.doc.update.mockResolvedValue({} as any)
 
       const result = await mutateDocumentContent(
         'user-1',
@@ -170,16 +171,9 @@ describe('api-v1-mutations', () => {
       )
 
       expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String))
-      expect(mockDb.doc.update).toHaveBeenCalledWith({
-        where: { id: 'doc-1' },
-        data: expect.objectContaining({
-          content: expect.any(String),
-          contentBinary: expect.any(Buffer),
-        }),
-      })
-      expect(mockDb.docVersion.delete).not.toHaveBeenCalled()
-      expect(result.versionId).toBe('snap-idle')
-      expect(result.etag).toMatch(/^"doc:doc-1:/)
+      expect(mockDb.doc.update).not.toHaveBeenCalled()
+      expect(result.etag).toBe(computeDocEtag('doc-1', after))
+      expect(result.etag).not.toBe(computeDocEtag('doc-1', before))
     })
 
     it('publishes a document change after a successful collaboration mutation', async () => {

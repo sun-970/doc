@@ -110,23 +110,43 @@ export async function restoreActiveDocument(
   deps: RestoreActiveDocumentDeps = {}
 ): Promise<RestoredDocument> {
   const getDocument = deps.getActiveDocument || getActiveDocument
-  const persistDocument = deps.persistRestoredDocument || persistRestoredDocument
   const activeDoc = getDocument(docId)
 
   if (!activeDoc) {
     throw new Error('Active document not found')
   }
 
+  return applyContentBinary(docId, contentBinaryBase64, deps)
+}
+
+/**
+ * Persist JSON+Yjs through the collab kernel (`updateDocBinaryAndJson`).
+ * If a live room exists (or appears after persist), also replace the in-memory Y.Doc
+ * so an open editor is not left beside a silently overwritten row.
+ */
+export async function applyContentBinary(
+  docId: string,
+  contentBinaryBase64: string,
+  deps: RestoreActiveDocumentDeps = {}
+): Promise<RestoredDocument & { appliedToRoom: boolean }> {
+  const getDocument = deps.getActiveDocument || getActiveDocument
+  const persistDocument = deps.persistRestoredDocument || persistRestoredDocument
+
   const binary = decodeBinaryFromBase64(contentBinaryBase64)
   const targetDoc = createTargetYdocFromBinary(binary)
   const targetJsonStr = serializeYdocToJsonString(targetDoc)
 
   await persistDocument(docId, binary, targetJsonStr)
-  replaceDocumentContent(activeDoc, targetDoc)
+
+  const activeDoc = getDocument(docId)
+  if (activeDoc) {
+    replaceDocumentContent(activeDoc, targetDoc)
+  }
 
   return {
     docId,
     contentBinary: binary,
     content: targetJsonStr,
+    appliedToRoom: Boolean(activeDoc),
   }
 }

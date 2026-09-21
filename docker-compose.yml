@@ -36,6 +36,7 @@ services:
       DATABASE_URL: postgresql://doc:doc@postgres:5432/doc?schema=public
       API_AUTH_KEY: ${COLLABORATE_API_AUTH_KEY:?COLLABORATE_API_AUTH_KEY is required}
       INTERNAL_API_KEY: ${COLLABORATE_INTERNAL_API_KEY:?COLLABORATE_INTERNAL_API_KEY is required}
+      DOC_WEB_INTERNAL_URL: http://web:3000
     depends_on:
       postgres:
         condition: service_healthy

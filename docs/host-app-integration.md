@@ -119,8 +119,8 @@ Content-Type: application/json
 ```
 
 `documents:write` is required. Send the `ETag` from `GET /api/v1/documents/{id}` as `baseVersion`
-(or `*` to force). A live collaboration room is updated in place; if nobody is editing in the
-browser, the write still persists. Stale `baseVersion` returns `409 version_conflict`.
+(or `*` to force). Collaboration owns persist (live room or idle `updateDocBinaryAndJson`). Stale
+`baseVersion` returns `409 version_conflict`.
 
 To refresh an open preview without polling in a loop, open:
 
@@ -131,7 +131,8 @@ Authorization: Bearer doc_pat_...
 
 The stream is `text/event-stream`. Handle `document.snapshot` then `document.updated`. On
 `document.updated`, re-fetch `GET /api/v1/documents/{id}` (or apply the new etag you already
-hold) so **更新于** is not a static snapshot. Requires `documents:read`.
+hold) so **更新于** is not a static snapshot. Requires `documents:read`. Web editor saves reach
+the same hub when collaboration can POST `DOC_WEB_INTERNAL_URL/api/internal/document-changes`.
 
 ## Error handling
 

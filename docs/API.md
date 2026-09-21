@@ -249,11 +249,11 @@ Content-Type: application/json
 - `*`: force the write;
 - any other value: `409 version_conflict`.
 
-If a Hocuspocus room is live, the write goes through
-`POST /collab/documents/{id}/restore` so connected Web editors receive the replace. If no room is
-active (`Active document not found`), the same JSON and Yjs binary are persisted on the document
-row so a later editor load sees the new body. Other collaboration failures return
-`503 collaboration_unavailable` and do not leave an orphan version snapshot.
+The write always goes through `POST /collab/documents/{id}/restore`. Collaboration persists
+JSON + Yjs binary with `updateDocBinaryAndJson` (the idle kernel). If a live room exists, or
+appears after persist, it also replaces the in-memory Y.Doc so an open editor is not left beside
+an overwritten row. The API process does not `UPDATE "Doc"` itself. Other collaboration failures
+return `503 collaboration_unavailable` and do not leave an orphan version snapshot.
 
 A successful response is `200` with `documentId`, `versionId`, `etag`, and `operationId`, and an
 `ETag` header. Optional `idempotencyKey` (max 128 characters) replays the same result for a short
@@ -267,7 +267,9 @@ GET /api/v1/documents/{id}/events
 
 Requires `documents:read`. The response is `text/event-stream`. The first event is
 `document.snapshot` with the current `etag` and `updatedAt`. Later `document.updated` events fire
-when this process applies a content replacement. Heartbeats are comment lines.
+when this Web/API process learns of a content change: a successful `PUT` (CLI/API), or a
+Hocuspocus `onStoreDocument` / restore that notifies `POST /api/internal/document-changes`
+(`DOC_WEB_INTERNAL_URL` + internal key). Heartbeats are comment lines.
 
 ```
 event: document.snapshot

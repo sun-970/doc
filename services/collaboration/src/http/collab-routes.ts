@@ -2,9 +2,9 @@ import Router from '@koa/router'
 import type Koa from 'koa'
 import { createHash, timingSafeEqual } from 'node:crypto'
 
-import { hasActiveDocument } from '../hocuspocus/active-docs.js'
-import { restoreActiveDocument } from '../hocuspocus/restore.js'
+import { applyContentBinary } from '../hocuspocus/restore.js'
 import { errorMessage } from '../lib/error.js'
+import { notifyWebDocumentChangeBestEffort } from '../lib/notify-web-document-change.js'
 
 export const MAX_ACCESS_REQUEST_BYTES = 4 * 1024
 
@@ -102,10 +102,10 @@ export function createCollabRouter(deps: CollabRouterDeps): Router {
       const body = parseRestoreBody(ctx.request.body)
       if (!docId) throw new Error('docId is required')
       if (body == null) throw new Error('contentBinaryBase64 is required')
-      if (!hasActiveDocument(docId)) throw new Error('Active document not found')
 
-      await restoreActiveDocument(docId, body.contentBinaryBase64)
-      ctx.body = { success: true, data: { docId } }
+      const applied = await applyContentBinary(docId, body.contentBinaryBase64)
+      notifyWebDocumentChangeBestEffort(docId)
+      ctx.body = { success: true, data: { docId, appliedToRoom: applied.appliedToRoom } }
     } catch (error) {
       ctx.status = 400
       ctx.body = { success: false, msg: errorMessage(error, 'restore failed') }
