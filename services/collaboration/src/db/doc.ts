@@ -69,11 +69,21 @@ export async function updateDocBinary(id: string, binary: Uint8Array): Promise<n
  * @returns {number} updated rowCount
  */
 // 同时更新正文二进制和 JSON 镜像，保证恢复后的状态一致。
-export async function updateDocBinaryAndJson(id: string, binary: Uint8Array, jsonStr: string): Promise<number> {
+export async function updateDocBinaryAndJson(
+  id: string,
+  binary: Uint8Array,
+  jsonStr: string,
+  expectedUpdatedAt?: Date
+): Promise<number> {
   try {
     const contentSearch = extractPlainTextFromJson(jsonStr)
-    const sql = `update "Doc" set "contentBinary" = $1, content = $2, "contentSearch" = $3, "updatedAt" = $4 where id = $5`
-    const values = [binary, jsonStr, contentSearch || null, new Date(), id]
+    const nextUpdatedAt = new Date()
+    const sql = expectedUpdatedAt
+      ? `update "Doc" set "contentBinary" = $1, content = $2, "contentSearch" = $3, "updatedAt" = $4 where id = $5 and "updatedAt" = $6`
+      : `update "Doc" set "contentBinary" = $1, content = $2, "contentSearch" = $3, "updatedAt" = $4 where id = $5`
+    const values = expectedUpdatedAt
+      ? [binary, jsonStr, contentSearch || null, nextUpdatedAt, id, expectedUpdatedAt]
+      : [binary, jsonStr, contentSearch || null, nextUpdatedAt, id]
     const result = await pgClient.query(sql, values)
     return result.rowCount ?? 0
   } catch (error) {

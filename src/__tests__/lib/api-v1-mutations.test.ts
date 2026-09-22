@@ -118,6 +118,53 @@ describe('api-v1-mutations', () => {
       ).rejects.toThrow('Document has been modified')
     })
 
+    it('passes the read updatedAt to collab so a live write cannot be clobbered', async () => {
+      const mockCollabMutate = vi.fn().mockResolvedValue(undefined)
+      const updatedAt = new Date('2026-01-01T00:00:00Z')
+      mockDb.doc.findFirst
+        .mockResolvedValueOnce({
+          id: 'doc-1',
+          title: 'Test',
+          content: '{}',
+          contentBinary: Buffer.from('old'),
+          updatedAt,
+        } as any)
+        .mockResolvedValueOnce({ updatedAt: new Date('2026-01-01T00:00:04Z') } as any)
+      mockDb.docVersion.create.mockResolvedValue({ id: 'snap-cas' } as any)
+
+      await mutateDocumentContent(
+        'user-1',
+        'doc-1',
+        { content: { type: 'doc', content: [] }, baseVersion: computeDocEtag('doc-1', updatedAt) },
+        { callCollabMutate: mockCollabMutate }
+      )
+
+      expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String), updatedAt.toISOString())
+    })
+
+    it('maps a collab version_conflict onto 409 without treating it as unavailable', async () => {
+      const mockCollabMutate = vi.fn().mockRejectedValue(new Error('version_conflict'))
+      const updatedAt = new Date('2026-01-01T00:00:00Z')
+      mockDb.doc.findFirst.mockResolvedValue({
+        id: 'doc-1',
+        title: 'Test',
+        content: '{}',
+        contentBinary: Buffer.from('old'),
+        updatedAt,
+      } as any)
+      mockDb.docVersion.create.mockResolvedValue({ id: 'snap-race' } as any)
+
+      await expect(
+        mutateDocumentContent(
+          'user-1',
+          'doc-1',
+          { content: { type: 'doc', content: [] }, baseVersion: computeDocEtag('doc-1', updatedAt) },
+          { callCollabMutate: mockCollabMutate }
+        )
+      ).rejects.toMatchObject({ status: 409, code: 'version_conflict' })
+      expect(mockDb.docVersion.delete).toHaveBeenCalledWith({ where: { id: 'snap-race' } })
+    })
+
     it('serializes mutation through collaboration authority', async () => {
       const mockCollabMutate = vi.fn().mockResolvedValue(undefined)
       mockDb.doc.findFirst
@@ -140,7 +187,7 @@ describe('api-v1-mutations', () => {
         { callCollabMutate: mockCollabMutate }
       )
 
-      expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String))
+      expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String), undefined)
       expect(result.documentId).toBe('doc-1')
       expect(result.versionId).toBe('snap-1')
       expect(result.operationId).toContain('mutate:doc-1:')
@@ -170,7 +217,7 @@ describe('api-v1-mutations', () => {
         { callCollabMutate: mockCollabMutate }
       )
 
-      expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String))
+      expect(mockCollabMutate).toHaveBeenCalledWith('doc-1', expect.any(String), undefined)
       expect(mockDb.doc.update).not.toHaveBeenCalled()
       expect(result.etag).toBe(computeDocEtag('doc-1', after))
       expect(result.etag).not.toBe(computeDocEtag('doc-1', before))

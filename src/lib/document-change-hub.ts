@@ -8,6 +8,10 @@ type DocumentChangeListener = (payload: DocumentChangePayload) => void
 
 const listeners = new Map<string, Set<DocumentChangeListener>>()
 
+export function documentChangeSubscriberCount(documentId: string): number {
+  return listeners.get(documentId)?.size ?? 0
+}
+
 export function subscribeDocumentChanges(documentId: string, listener: DocumentChangeListener): () => void {
   const bucket = listeners.get(documentId) ?? new Set<DocumentChangeListener>()
   bucket.add(listener)

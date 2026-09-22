@@ -14,7 +14,7 @@ vi.mock('@/lib/api-v1-documents', () => ({
 }))
 
 import { GET as watchDocument } from '@/app/api/v1/documents/[id]/events/route'
-import { publishDocumentChange } from '@/lib/document-change-hub'
+import { documentChangeSubscriberCount, publishDocumentChange } from '@/lib/document-change-hub'
 
 const principal = {
   userId: 'user-1',
@@ -81,5 +81,49 @@ describe('GET /api/v1/documents/{id}/events', () => {
     expect(chunk).toContain('event: document.updated')
     expect(chunk).toContain('\\"doc:doc-1:next\\"')
     await reader.cancel()
+  })
+
+  it('releases the hub subscription when the consumer cancels', async () => {
+    const response = await watchDocument(apiRequest('/api/v1/documents/doc-1/events'), {
+      params: { id: 'doc-1' },
+    })
+    const reader = response.body!.getReader()
+    await reader.read()
+    expect(documentChangeSubscriberCount('doc-1')).toBe(1)
+    await reader.cancel()
+    expect(documentChangeSubscriberCount('doc-1')).toBe(0)
+    expect(() =>
+      publishDocumentChange('doc-1', {
+        documentId: 'doc-1',
+        etag: '"doc:doc-1:after-cancel"',
+        updatedAt: '2026-01-01T00:00:09.000Z',
+      })
+    ).not.toThrow()
+  })
+
+  it('emits document.updated when the durable row etag changes on another process', async () => {
+    vi.useFakeTimers()
+    mocks.getApiDocument
+      .mockResolvedValueOnce({
+        document: { id: 'doc-1', title: 'Runbook', updatedAt: '2026-01-01T00:00:00.000Z' },
+        etag: '"doc:doc-1:start"',
+      })
+      .mockResolvedValue({
+        document: { id: 'doc-1', title: 'Runbook', updatedAt: '2026-01-01T00:00:08.000Z' },
+        etag: '"doc:doc-1:other-process"',
+      })
+    const response = await watchDocument(apiRequest('/api/v1/documents/doc-1/events'), {
+      params: { id: 'doc-1' },
+    })
+    const reader = response.body!.getReader()
+    await reader.read()
+    const pending = reader.read()
+    await vi.advanceTimersByTimeAsync(2_000)
+    const { value } = await pending
+    const chunk = new TextDecoder().decode(value)
+    expect(chunk).toContain('event: document.updated')
+    expect(chunk).toContain('other-process')
+    await reader.cancel()
+    vi.useRealTimers()
   })
 })

@@ -42,13 +42,17 @@ export interface RestoreResult {
 }
 
 export interface MutationDeps {
-  callCollabMutate?: (docId: string, contentBinaryBase64: string) => Promise<void>
+  callCollabMutate?: (docId: string, contentBinaryBase64: string, expectedUpdatedAt?: string) => Promise<void>
   callCollabRestore?: (docId: string, contentBinaryBase64: string) => Promise<void>
 }
 
 // --- Helpers ---
 
-async function callCollabMutateDefault(docId: string, contentBinaryBase64: string): Promise<void> {
+async function callCollabMutateDefault(
+  docId: string,
+  contentBinaryBase64: string,
+  expectedUpdatedAt?: string
+): Promise<void> {
   const baseUrl = process.env.COLLABORATE_EDIT_HTTP_URL || ''
   const internalKey = process.env.COLLABORATE_INTERNAL_API_KEY || ''
   if (!baseUrl) throw new Error('COLLABORATE_EDIT_HTTP_URL required')
@@ -60,7 +64,10 @@ async function callCollabMutateDefault(docId: string, contentBinaryBase64: strin
       'Content-Type': 'application/json',
       'x-doc-internal-key': internalKey,
     },
-    body: JSON.stringify({ contentBinaryBase64 }),
+    body: JSON.stringify({
+      contentBinaryBase64,
+      ...(expectedUpdatedAt ? { expectedUpdatedAt } : {}),
+    }),
   })
 
   const data = await res.json()
@@ -164,10 +171,19 @@ export async function mutateDocumentContent(
   // (`updateDocBinaryAndJson`). The API process never writes Doc.content itself.
   const collabMutate = deps.callCollabMutate || callCollabMutateDefault
   const contentBinaryBase64 = encoded.contentBinary.toString('base64')
+  const expectedUpdatedAt = input.baseVersion === '*' ? undefined : doc.updatedAt.toISOString()
   try {
-    await collabMutate(docId, contentBinaryBase64)
-  } catch {
-    await db.docVersion.delete({ where: { id: snapshot.id } }).catch(() => undefined)
+    await collabMutate(docId, contentBinaryBase64, expectedUpdatedAt)
+  } catch (error) {
+    try {
+      await db.docVersion.delete({ where: { id: snapshot.id } })
+    } catch {
+      /* snapshot may already be gone */
+    }
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('version_conflict')) {
+      throw new ApiV1Error(409, 'version_conflict', 'Document has been modified since the specified base version')
+    }
     throw new ApiV1Error(
       503,
       'collaboration_unavailable',

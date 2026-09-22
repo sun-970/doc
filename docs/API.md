@@ -271,7 +271,11 @@ when this Web/API process learns of a content change: a successful `PUT` (CLI/AP
 Hocuspocus `onStoreDocument` / restore that notifies `POST /api/internal/document-changes`.
 Collaboration requires `DOC_WEB_INTERNAL_URL` and sends
 `COLLABORATE_INTERNAL_API_KEY` or `INTERNAL_API_KEY` (same secret the Web process
-accepts). Notify is fail-closed: missing URL/key or a non-2xx response fails the store/restore.
+accepts). Notify after persist is best-effort: a missing URL/key or Web 5xx is
+logged and does not fail a successful store/restore. The watch stream also polls
+the durable `Doc` row so a subscriber on another Web process still sees
+`document.updated` (this is not a multi-instance push bus). Host Memory UI and
+Markdown↔TipTap remain out of this repo; do not treat this endpoint as closing #82.
 Heartbeats are comment lines.
 
 ```
@@ -283,8 +287,8 @@ data: {"documentId":"document-id","etag":"\"doc:document-id:next\"","updatedAt":
 ```
 
 Hosts should treat a new `etag` as the signal to refresh preview content (`GET /api/v1/documents/{id}`
-or the payload they already hold). Cross-process watchers still need to poll `GET` if they are not
-on the instance that accepted the `PUT`.
+or the payload they already hold). PUT compares `baseVersion` again at the collaboration persist
+boundary (`expectedUpdatedAt`); a live-room write in between returns `409 version_conflict`.
 
 ## CLI mapping
 

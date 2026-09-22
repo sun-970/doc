@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { notifyWebDocumentChange } from '../src/lib/notify-web-document-change.js'
+import { notifyWebDocumentChange, notifyWebDocumentChangeBestEffort } from '../src/lib/notify-web-document-change.js'
 
 describe('notifyWebDocumentChange', () => {
   const previous = {
@@ -40,5 +40,15 @@ describe('notifyWebDocumentChange', () => {
         headers: expect.objectContaining({ 'x-doc-internal-key': 'web-key' }),
       })
     )
+  })
+
+  it('best-effort notify does not throw after persist when the hub is down', async () => {
+    process.env.DOC_WEB_INTERNAL_URL = 'http://web.test'
+    process.env.COLLABORATE_INTERNAL_API_KEY = 'web-key'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response('down', { status: 503 }))
+    )
+    await expect(notifyWebDocumentChangeBestEffort('doc-1')).resolves.toBeUndefined()
   })
 })

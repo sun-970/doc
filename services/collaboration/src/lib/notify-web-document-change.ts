@@ -12,7 +12,8 @@ function notifyInternalKey(): string {
 /**
  * Tell the Web/API process that the backing row changed so in-process SSE
  * subscribers (host previews) can follow Web/Hocuspocus writes.
- * Fail closed: missing URL/key or a non-2xx response throws.
+ * Throws on missing URL/key or a non-2xx response. Persist callers must use
+ * `notifyWebDocumentChangeBestEffort` so a notify failure cannot fail a write.
  */
 export async function notifyWebDocumentChange(documentId: string): Promise<void> {
   const baseUrl = notifyBaseUrl()
@@ -35,5 +36,14 @@ export async function notifyWebDocumentChange(documentId: string): Promise<void>
   if (!res.ok) {
     const detail = errorMessage(await res.text().catch(() => ''), '')
     throw new Error(`document-change notify failed: ${res.status} ${detail}`)
+  }
+}
+
+/** Persist already succeeded. Log loudly; never throw into the write path. */
+export async function notifyWebDocumentChangeBestEffort(documentId: string): Promise<void> {
+  try {
+    await notifyWebDocumentChange(documentId)
+  } catch (error) {
+    console.error('[doc] document-change notify failed after persist', documentId, errorMessage(error))
   }
 }

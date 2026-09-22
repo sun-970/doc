@@ -16,7 +16,7 @@ import * as Y from 'yjs'
 import { getDocById, updateDocBinary, updateDocJsonStr } from '../db/doc.js'
 import { getShareRelationAccess, updateShareRelationNoticeType, type DocumentAccess } from '../db/share-relation.js'
 import { decryptToken } from '../lib/token.js'
-import { notifyWebDocumentChange } from '../lib/notify-web-document-change.js'
+import { notifyWebDocumentChangeBestEffort } from '../lib/notify-web-document-change.js'
 import { removeActiveDocument, setActiveDocument } from './active-docs.js'
 import {
   adaptHocuspocusMessage,
@@ -63,7 +63,7 @@ export async function onStoreDocument(data: onStoreDocumentPayload): Promise<voi
 
   // update share relation notice type to 'UPDATE'
   await updateShareRelationNoticeType(documentName, contextUserId(data.context))
-  if (rowCount > 0) await notifyWebDocumentChange(documentName)
+  if (rowCount > 0) await notifyWebDocumentChangeBestEffort(documentName)
 }
 
 // on db fetch doc

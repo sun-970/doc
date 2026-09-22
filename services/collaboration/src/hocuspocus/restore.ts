@@ -16,7 +16,12 @@ function insertXmlChildren(container: XmlContainer, children: XmlChild[]): void 
 
 export interface RestoreActiveDocumentDeps {
   getActiveDocument?: (docId: string) => Y.Doc | null
-  persistRestoredDocument?: (docId: string, binary: Uint8Array, jsonStr: string) => Promise<number>
+  persistRestoredDocument?: (
+    docId: string,
+    binary: Uint8Array,
+    jsonStr: string,
+    expectedUpdatedAt?: string
+  ) => Promise<number>
 }
 
 export interface RestoredDocument {
@@ -94,10 +99,16 @@ export function replaceDocumentContent(activeDoc: Y.Doc, targetDoc: Y.Doc): void
 }
 
 // 将恢复后的正文二进制和 JSON 镜像一次性持久化到主库。
-export async function persistRestoredDocument(docId: string, binary: Uint8Array, jsonStr: string): Promise<number> {
-  const rowCount = await updateDocBinaryAndJson(docId, binary, jsonStr)
+export async function persistRestoredDocument(
+  docId: string,
+  binary: Uint8Array,
+  jsonStr: string,
+  expectedUpdatedAt?: string
+): Promise<number> {
+  const expected = expectedUpdatedAt ? new Date(expectedUpdatedAt) : undefined
+  const rowCount = await updateDocBinaryAndJson(docId, binary, jsonStr, expected)
   if (rowCount <= 0) {
-    throw new Error('Document not found')
+    throw new Error(expectedUpdatedAt ? 'version_conflict' : 'Document not found')
   }
 
   return rowCount
@@ -127,7 +138,8 @@ export async function restoreActiveDocument(
 export async function applyContentBinary(
   docId: string,
   contentBinaryBase64: string,
-  deps: RestoreActiveDocumentDeps = {}
+  deps: RestoreActiveDocumentDeps = {},
+  expectedUpdatedAt?: string
 ): Promise<RestoredDocument & { appliedToRoom: boolean }> {
   const getDocument = deps.getActiveDocument || getActiveDocument
   const persistDocument = deps.persistRestoredDocument || persistRestoredDocument
@@ -136,7 +148,10 @@ export async function applyContentBinary(
   const targetDoc = createTargetYdocFromBinary(binary)
   const targetJsonStr = serializeYdocToJsonString(targetDoc)
 
-  await persistDocument(docId, binary, targetJsonStr)
+  const rowCount = await persistDocument(docId, binary, targetJsonStr, expectedUpdatedAt)
+  if (rowCount <= 0) {
+    throw new Error(expectedUpdatedAt ? 'version_conflict' : 'Document not found')
+  }
 
   const activeDoc = getDocument(docId)
   if (activeDoc) {

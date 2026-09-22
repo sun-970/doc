@@ -135,7 +135,7 @@ describe('multi-client collaboration recovery', () => {
 
     expect(client.getXmlFragment('default').toString()).toBe(active.getXmlFragment('default').toString())
     expect(Buffer.from(result.contentBinary)).toEqual(Buffer.from(targetBinary))
-    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-1', result.contentBinary, result.content)
+    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-1', result.contentBinary, result.content, undefined)
     const reloadedPersistedTarget = createTargetYdocFromBinary(result.contentBinary)
     expect(reloadedPersistedTarget.getXmlFragment('default').toString()).toBe(
       active.getXmlFragment('default').toString()
@@ -177,7 +177,7 @@ describe('multi-client collaboration recovery', () => {
       persistRestoredDocument,
     })
     expect(result.appliedToRoom).toBe(false)
-    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-idle', result.contentBinary, result.content)
+    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-idle', result.contentBinary, result.content, undefined)
   })
 
   it('idle apply also replaces a room that appears after persist', async () => {
@@ -193,5 +193,20 @@ describe('multi-client collaboration recovery', () => {
     })
     expect(result.appliedToRoom).toBe(true)
     expect(active.getXmlFragment('default').toString()).toContain('fresh')
+  })
+
+  it('refuses persist when expectedUpdatedAt no longer matches the row', async () => {
+    const target = paragraphDoc('lost-race')
+    await expect(
+      applyContentBinary(
+        'doc-cas',
+        Buffer.from(Y.encodeStateAsUpdate(target)).toString('base64'),
+        {
+          getActiveDocument: () => null,
+          persistRestoredDocument: async () => 0,
+        },
+        '2026-01-01T00:00:00.000Z'
+      )
+    ).rejects.toThrow('version_conflict')
   })
 })
