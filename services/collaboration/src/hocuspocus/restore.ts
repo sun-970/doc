@@ -168,9 +168,9 @@ export async function applyContentBinary(
     if (rowCount <= 0) {
       throw new Error(expectedUpdatedAt ? 'version_conflict' : 'Document not found')
     }
-    if (liveFingerprint !== '' && liveDocumentFingerprint(getDocument(docId)) !== liveFingerprint) {
-      throw new Error('version_conflict')
-    }
+    // Never 409 after a committed write: that forks the live room from the row.
+    // Fingerprint mismatch must fail inside persist (before SQL). After rowCount>0,
+    // sync the in-memory room to the committed payload.
 
     const activeDoc = getDocument(docId)
     if (activeDoc) {

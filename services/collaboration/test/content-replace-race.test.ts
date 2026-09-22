@@ -112,6 +112,30 @@ describe('independent CAS and live Y.Doc race regressions', () => {
     expect(dbContent).not.toContain('put-body')
   })
 
+  it('does not 409 after persist already committed when the live room moved', async () => {
+    const live = paragraphDoc('base')
+    let dbContent = serializeYdocToJsonString(live)
+    await expect(
+      applyContentBinary(
+        'committed-then-live',
+        payload('put-body'),
+        {
+          getActiveDocument: () => live,
+          persistRestoredDocument: async (_id, _binary, content) => {
+            dbContent = content
+            append(live, '-live-edit')
+            return 1
+          },
+        },
+        '2026-01-01T00:00:00.000Z'
+      )
+    ).resolves.toMatchObject({ appliedToRoom: true })
+    expect(dbContent).toContain('put-body')
+    expect(text(live)).toContain('put-body')
+    expect(text(live)).not.toContain('-live-edit')
+    expect(serializeYdocToJsonString(live)).toBe(dbContent)
+  })
+
   it('keeps the live room consistent with the last committed concurrent PUT', async () => {
     const live = paragraphDoc('base')
     const committedA = deferred<void>()
