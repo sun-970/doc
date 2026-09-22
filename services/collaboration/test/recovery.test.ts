@@ -135,7 +135,13 @@ describe('multi-client collaboration recovery', () => {
 
     expect(client.getXmlFragment('default').toString()).toBe(active.getXmlFragment('default').toString())
     expect(Buffer.from(result.contentBinary)).toEqual(Buffer.from(targetBinary))
-    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-1', result.contentBinary, result.content, undefined)
+    expect(persistRestoredDocument).toHaveBeenCalledWith(
+      'doc-1',
+      result.contentBinary,
+      result.content,
+      undefined,
+      expect.any(String)
+    )
     const reloadedPersistedTarget = createTargetYdocFromBinary(result.contentBinary)
     expect(reloadedPersistedTarget.getXmlFragment('default').toString()).toBe(
       active.getXmlFragment('default').toString()
@@ -177,7 +183,13 @@ describe('multi-client collaboration recovery', () => {
       persistRestoredDocument,
     })
     expect(result.appliedToRoom).toBe(false)
-    expect(persistRestoredDocument).toHaveBeenCalledWith('doc-idle', result.contentBinary, result.content, undefined)
+    expect(persistRestoredDocument).toHaveBeenCalledWith(
+      'doc-idle',
+      result.contentBinary,
+      result.content,
+      undefined,
+      ''
+    )
   })
 
   it('idle apply also replaces a room that appears after persist', async () => {

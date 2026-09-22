@@ -3,6 +3,7 @@ import * as Y from 'yjs'
 
 import { updateDocBinaryAndJson } from '../db/doc.js'
 import { getActiveDocument } from './active-docs.js'
+import { withDocumentMutation } from './document-gate.js'
 
 type XmlChild = Y.XmlElement | Y.XmlText | Y.XmlHook
 type XmlContainer = Y.XmlElement | Y.XmlFragment
@@ -20,7 +21,8 @@ export interface RestoreActiveDocumentDeps {
     docId: string,
     binary: Uint8Array,
     jsonStr: string,
-    expectedUpdatedAt?: string
+    expectedUpdatedAt?: string,
+    expectedLiveFingerprint?: string
   ) => Promise<number>
 }
 
@@ -47,6 +49,11 @@ export function createTargetYdocFromBinary(binary: Uint8Array): Y.Doc {
 }
 
 // 将恢复后的 Y.Doc 转成数据库可存储的 JSON 字符串。
+export function liveDocumentFingerprint(doc: Y.Doc | null | undefined): string {
+  if (!doc) return ''
+  return Buffer.from(Y.encodeStateAsUpdate(doc)).toString('base64')
+}
+
 export function serializeYdocToJsonString(ydoc: Y.Doc): string {
   const json = TiptapTransformer.fromYdoc(ydoc, 'default')
   return JSON.stringify(json)
@@ -103,8 +110,15 @@ export async function persistRestoredDocument(
   docId: string,
   binary: Uint8Array,
   jsonStr: string,
-  expectedUpdatedAt?: string
+  expectedUpdatedAt?: string,
+  expectedLiveFingerprint?: string
 ): Promise<number> {
+  if (
+    expectedLiveFingerprint !== undefined &&
+    liveDocumentFingerprint(getActiveDocument(docId)) !== expectedLiveFingerprint
+  ) {
+    throw new Error('version_conflict')
+  }
   const expected = expectedUpdatedAt ? new Date(expectedUpdatedAt) : undefined
   const rowCount = await updateDocBinaryAndJson(docId, binary, jsonStr, expected)
   if (rowCount <= 0) {
@@ -141,27 +155,33 @@ export async function applyContentBinary(
   deps: RestoreActiveDocumentDeps = {},
   expectedUpdatedAt?: string
 ): Promise<RestoredDocument & { appliedToRoom: boolean }> {
-  const getDocument = deps.getActiveDocument || getActiveDocument
-  const persistDocument = deps.persistRestoredDocument || persistRestoredDocument
+  return withDocumentMutation(docId, async () => {
+    const getDocument = deps.getActiveDocument || getActiveDocument
+    const persistDocument = deps.persistRestoredDocument || persistRestoredDocument
 
-  const binary = decodeBinaryFromBase64(contentBinaryBase64)
-  const targetDoc = createTargetYdocFromBinary(binary)
-  const targetJsonStr = serializeYdocToJsonString(targetDoc)
+    const binary = decodeBinaryFromBase64(contentBinaryBase64)
+    const targetDoc = createTargetYdocFromBinary(binary)
+    const targetJsonStr = serializeYdocToJsonString(targetDoc)
+    const liveFingerprint = liveDocumentFingerprint(getDocument(docId))
 
-  const rowCount = await persistDocument(docId, binary, targetJsonStr, expectedUpdatedAt)
-  if (rowCount <= 0) {
-    throw new Error(expectedUpdatedAt ? 'version_conflict' : 'Document not found')
-  }
+    const rowCount = await persistDocument(docId, binary, targetJsonStr, expectedUpdatedAt, liveFingerprint)
+    if (rowCount <= 0) {
+      throw new Error(expectedUpdatedAt ? 'version_conflict' : 'Document not found')
+    }
+    if (liveFingerprint !== '' && liveDocumentFingerprint(getDocument(docId)) !== liveFingerprint) {
+      throw new Error('version_conflict')
+    }
 
-  const activeDoc = getDocument(docId)
-  if (activeDoc) {
-    replaceDocumentContent(activeDoc, targetDoc)
-  }
+    const activeDoc = getDocument(docId)
+    if (activeDoc) {
+      replaceDocumentContent(activeDoc, targetDoc)
+    }
 
-  return {
-    docId,
-    contentBinary: binary,
-    content: targetJsonStr,
-    appliedToRoom: Boolean(activeDoc),
-  }
+    return {
+      docId,
+      contentBinary: binary,
+      content: targetJsonStr,
+      appliedToRoom: Boolean(activeDoc),
+    }
+  })
 }
