@@ -11,6 +11,8 @@ import { EMPTY_TIPTAP_DOCUMENT, encodeTiptapDocument } from '@/lib/tiptap-codec'
 import { parseOptionalDate, parseSort, buildSearchWhere, buildDateWhere, getOrderBy, SortValue } from '@/lib/doc-query'
 import { extractPlainText } from '@/lib/tiptap-text-extractor'
 import { fullTextSearch, computeMatchField, type MatchField } from '@/lib/doc-search'
+import { DOCUMENT_ACCESS, resolveDocumentAccess } from '@/lib/document-access'
+import { requestHostMemoryAdvice, type HostMemoryAccess } from '@/lib/host-memory-overlay'
 
 const DEFAULT_LIST_LIMIT = 50
 const MAX_LIST_LIMIT = 100
@@ -214,13 +216,29 @@ export async function listApiDocuments(userId: string, searchParams: URLSearchPa
 
   const rows = await db.doc.findMany({
     where,
-    select: documentMetadataSelect,
+    select: {
+      ...documentMetadataSelect,
+      userId: true,
+      shareRelations: {
+        where: { userId },
+        select: { access: true, authorId: true },
+      },
+    },
     orderBy,
     take: limit + 1,
   })
   const hasMore = rows.length > limit
   const documents = rows.slice(0, limit)
   const last = documents.at(-1)
+
+  const overlayCandidates = documents.map((document) => {
+    const access = resolveDocumentAccess(
+      { userId: document.userId ?? userId, shareRelations: document.shareRelations ?? [] },
+      userId
+    )
+    return { id: document.id, access: access as HostMemoryAccess }
+  })
+  const { ranking: hostMemory } = await requestHostMemoryAdvice(searchParams.get('taskSummary'), overlayCandidates)
 
   return {
     documents: documents.map((document) => {
@@ -229,8 +247,11 @@ export async function listApiDocuments(userId: string, searchParams: URLSearchPa
           ? (searchHits.get(document.id) ?? 'content')
           : computeMatchField(document.title, document.contentSearch, query.toLowerCase())
         : undefined
-      return toMetadataDto(document, 'owner', matchField)
+      const access = overlayCandidates.find((candidate) => candidate.id === document.id)?.access
+      const dtoAccess = access === DOCUMENT_ACCESS.WRITE ? 'write' : access === DOCUMENT_ACCESS.READ ? 'read' : 'owner'
+      return toMetadataDto(document, dtoAccess, matchField)
     }),
+    hostMemory,
     nextCursor:
       hasMore && last
         ? encodeCursor({

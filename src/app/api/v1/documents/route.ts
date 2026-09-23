@@ -14,6 +14,7 @@ export async function GET(request: Request) {
       requestId,
       meta: {
         nextCursor: result.nextCursor,
+        hostMemory: result.hostMemory,
       },
     })
   } catch (error) {
