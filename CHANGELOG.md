@@ -6,6 +6,8 @@ All notable changes to `doc` are documented here.
 
 ### Added
 
+- #86: Host Memory ranking abstains without a confirmed task intent and never sends document bodies on the default advice payload. Refs #82.
+
 - Migrate the app to Next.js 16.3.5 / React 19.1.2: async `params` via
   `resolveRouteParams`, ESLint 9 flat config, and `serverExternalPackages`.
   No feature re-ships (search, likes, nav, Mailpit stay as on main).
