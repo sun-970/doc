@@ -1,12 +1,15 @@
 /** Host Memory list ranking (#86). Without a confirmed task intent, abstain. */
 
 export type HostMemoryRankResult =
-  | { status: 'abstain'; reason: 'missing_task_intent' | 'no_accessible_candidates' }
+  | {
+      status: 'abstain'
+      reason: 'missing_task_intent' | 'no_accessible_candidates'
+    }
   | { status: 'needs_provider'; candidates: string[] }
 
 export function rankAccessibleDocuments(
   taskSummary: string | null | undefined,
-  accessibleIds: readonly string[],
+  accessibleIds: readonly string[]
 ): HostMemoryRankResult {
   if (accessibleIds.length === 0) {
     return { status: 'abstain', reason: 'no_accessible_candidates' }
