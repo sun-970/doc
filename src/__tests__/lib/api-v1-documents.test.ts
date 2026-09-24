@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   updateMany: vi.fn(),
   nextSortOrder: vi.fn(),
   fullTextSearch: vi.fn(),
+  askLaya: vi.fn(),
 }))
 
 vi.mock('server-only', () => ({}))
@@ -27,6 +28,10 @@ vi.mock('@/db/db', () => ({
 vi.mock('@/lib/doc-sort-order', () => ({
   getNextSortOrderForParent: mocks.nextSortOrder,
 }))
+vi.mock('@/lib/laya-client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/laya-client')>()
+  return { ...actual, askLayaDocumentRanking: mocks.askLaya }
+})
 vi.mock('@/lib/doc-search', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/doc-search')>()
   return { ...actual, fullTextSearch: mocks.fullTextSearch }
@@ -217,7 +222,28 @@ describe('v1 document service', () => {
     const result = await listApiDocuments('user-1', new URLSearchParams({ taskSummary: 'deploy notes' }))
 
     expect(result.hostMemory).toEqual({ status: 'needs_provider', candidates: ['doc-1'] })
+    expect(mocks.askLaya).not.toHaveBeenCalled()
     expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
+  test('listApiDocuments calls local Laya when DOC_LAYA_ENABLED is on', async () => {
+    mocks.findMany.mockResolvedValue([metadata])
+    mocks.askLaya.mockResolvedValue(['doc-1'])
+    const previous = process.env.DOC_LAYA_ENABLED
+    process.env.DOC_LAYA_ENABLED = '1'
+    try {
+      const result = await listApiDocuments('user-1', new URLSearchParams({ taskSummary: 'deploy notes' }))
+      expect(mocks.askLaya).toHaveBeenCalledWith({ ids: ['doc-1'] }, expect.anything())
+      expect(result.hostMemory).toEqual({
+        status: 'suggest',
+        candidates: ['doc-1'],
+        overlayOrder: ['doc-1'],
+      })
+      expect(result.documents[0]?.id).toBe('doc-1')
+    } finally {
+      if (previous === undefined) delete process.env.DOC_LAYA_ENABLED
+      else process.env.DOC_LAYA_ENABLED = previous
+    }
   })
 
   test('searches document content when query does not match title', async () => {

@@ -6,9 +6,7 @@ All notable changes to `doc` are documented here.
 
 ### Added
 
-- #86: Host Memory ranking abstains without a confirmed task intent. Overlay candidates drop `NONE` access via `resolveDocumentAccess`. `GET /api/v1/documents` returns list abstain copy in `meta.hostMemory`. Default advice payload never includes document bodies. Overlay does not change `shareRelations`. Refs #82.
-
-- #85 #87 #88 #89 #90 #91 #92 #93: Host Memory product overlays for per-save previous-version attach, omitted-slice vs versions/restore, document-card open, share/leave handoff, remember/correct as a new version, pin/forget with visible forget failure, delivery preflight on conflicting docs, and export omit-reason next step. Default off. Overlay cannot skip collab persist, PATCH content, imply WRITE/OWNER, enlarge grants without the share API, rewrite a past version in place, mark a document accepted, or mutate export bytes. Known `NONE` omit and omittedBytes=0 never call Laya. Default advice payload stays metadata-only. Decision model is Laya (`DOC_LAYA_ENABLED`, `DOC_JEV_ENABLED` alias). Refs #82.
+- Host Memory list ranking abstains without a confirmed task intent. Overlay candidates drop `NONE` access via `resolveDocumentAccess`. `GET /api/v1/documents` returns list abstain copy in `meta.hostMemory`. When `DOC_LAYA_ENABLED` is on, `listApiDocuments` calls local Laya (`http://127.0.0.1:18081/v1/systemone`) with metadata ids only; the document list order stays the query result. Default off. No Authorization header. Overlay does not change `shareRelations`.
 
 - Migrate the app to Next.js 16.3.5 / React 19.1.2: async `params` via
   `resolveRouteParams`, ESLint 9 flat config, and `serverExternalPackages`.
