@@ -15,6 +15,7 @@ export type HostMemoryRankResult =
       candidates: string[]
     }
   | { status: 'needs_provider'; candidates: string[] }
+  | { status: 'suggest'; candidates: string[]; overlayOrder: string[] }
 
 export const HOST_MEMORY_ABSTAIN_COPY = {
   missing_task_intent: 'No confirmed task intent; document ranking abstains.',
@@ -70,7 +71,23 @@ export function hostMemoryLayaEnabled(env: NodeJS.Dict<string> = process.env): b
 /** @deprecated Use hostMemoryLayaEnabled. */
 export const hostMemoryJevEnabled = hostMemoryLayaEnabled
 
-export type HostMemoryAsk = (payload: Record<string, unknown>) => Promise<unknown>
+export type HostMemoryAsk = (payload: Record<string, unknown>) => Promise<string[] | null>
+
+export function applyOverlayOrder<T extends { id: string }>(items: T[], overlayOrder: readonly string[]): T[] {
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const used = new Set<string>()
+  const next: T[] = []
+  for (const id of overlayOrder) {
+    const item = byId.get(id)
+    if (!item || used.has(id)) continue
+    next.push(item)
+    used.add(id)
+  }
+  for (const item of items) {
+    if (!used.has(item.id)) next.push(item)
+  }
+  return next
+}
 
 /** Live path: missing taskSummary or flag-off never calls Laya. */
 export async function requestHostMemoryAdvice(
@@ -84,6 +101,12 @@ export async function requestHostMemoryAdvice(
   const payload: Record<string, unknown> = { ids: ranking.candidates }
   assertMetadataOnlyAdvicePayload(payload)
   if (!deps.ask) return { ranking, called: false }
-  await deps.ask(payload)
-  return { ranking, called: true }
+  const overlayOrder = await deps.ask(payload)
+  if (!overlayOrder || overlayOrder.every((id) => !ranking.candidates.includes(id))) {
+    return { ranking, called: true }
+  }
+  return {
+    ranking: { status: 'suggest', candidates: ranking.candidates, overlayOrder },
+    called: true,
+  }
 }

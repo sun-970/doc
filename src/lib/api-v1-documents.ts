@@ -12,8 +12,8 @@ import { parseOptionalDate, parseSort, buildSearchWhere, buildDateWhere, getOrde
 import { extractPlainText } from '@/lib/tiptap-text-extractor'
 import { fullTextSearch, computeMatchField, type MatchField } from '@/lib/doc-search'
 import { DOCUMENT_ACCESS, resolveDocumentAccess } from '@/lib/document-access'
-import { requestHostMemoryAdvice, type HostMemoryAccess } from '@/lib/host-memory-overlay'
-import { askLaya, type LayaAnswer, type LayaQuestion } from '@/lib/laya/client'
+import { applyOverlayOrder, requestHostMemoryAdvice, type HostMemoryAccess } from '@/lib/host-memory-overlay'
+import { askLaya } from '@/lib/laya/client'
 
 export type ListApiDocumentsDeps = {
   env?: NodeJS.Dict<string>
@@ -245,38 +245,32 @@ export async function listApiDocuments(userId: string, searchParams: URLSearchPa
     return { id: document.id, access: access as HostMemoryAccess }
   })
   const env = deps.env ?? process.env
-  let layaAnswers: Record<string, LayaAnswer> | null = null
   const { ranking: hostMemory } = await requestHostMemoryAdvice(searchParams.get('taskSummary'), overlayCandidates, {
     env,
     ask: async (payload) => {
       const ids = Array.isArray(payload.ids) ? payload.ids.filter((id): id is string => typeof id === 'string') : []
-      const questions: Record<string, LayaQuestion> = {}
-      for (const id of ids) {
-        questions[id] = {
-          type: 'score',
-          instructions: 'Relevance of this document id to the confirmed task intent. Metadata only.',
-          criteria: ['relevance'],
-        }
-      }
-      layaAnswers = await askLaya({ state: payload, questions }, { env, fetchImpl: deps.fetchImpl })
+      const answers = await askLaya(
+        {
+          state: { ids },
+          questions: {
+            rank: {
+              type: 'choice',
+              instructions: 'Pick the best matching accessible document id. Advisory. Do not grant access.',
+              criteria: Object.fromEntries(ids.map((id) => [id, `Accessible document ${id}`])),
+            },
+          },
+        },
+        { env, fetchImpl: deps.fetchImpl }
+      )
+      const rank = answers?.rank
+      if (!rank || rank.type !== 'choice' || !ids.includes(rank.selected)) return null
+      const scored = [...ids].sort((left, right) => (rank.probabilities[right] ?? 0) - (rank.probabilities[left] ?? 0))
+      return [rank.selected, ...scored.filter((id) => id !== rank.selected)]
     },
   })
 
-  const orderedDocuments = [...documents]
-  if (layaAnswers) {
-    const scoreOf = (id: string): number | null => {
-      const answer = layaAnswers?.[id]
-      return answer?.type === 'score' && Number.isFinite(answer.score) ? answer.score : null
-    }
-    orderedDocuments.sort((left, right) => {
-      const leftScore = scoreOf(left.id)
-      const rightScore = scoreOf(right.id)
-      if (leftScore === null && rightScore === null) return 0
-      if (leftScore === null) return 1
-      if (rightScore === null) return -1
-      return rightScore - leftScore
-    })
-  }
+  const orderedDocuments =
+    hostMemory.status === 'suggest' ? applyOverlayOrder(documents, hostMemory.overlayOrder) : documents
 
   return {
     documents: orderedDocuments.map((document) => {

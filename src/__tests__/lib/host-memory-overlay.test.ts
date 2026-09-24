@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  applyOverlayOrder,
   assertMetadataOnlyAdvicePayload,
   filterAccessibleOverlayIds,
   HOST_MEMORY_ABSTAIN_COPY,
@@ -94,5 +95,29 @@ describe('host memory overlay ranking (#86)', () => {
     })
     expect(result.called).toBe(true)
     expect(ask).toHaveBeenCalledWith({ ids: ['doc-a'] })
+  })
+
+  it('applies Laya overlay order without dropping unmatched items', () => {
+    expect(
+      applyOverlayOrder([{ id: 'doc-a' }, { id: 'doc-b' }, { id: 'doc-c' }], ['doc-c', 'doc-a']).map((item) => item.id)
+    ).toEqual(['doc-c', 'doc-a', 'doc-b'])
+  })
+
+  it('returns suggest ranking when Laya returns an overlay order', async () => {
+    const ask = vi.fn(async () => ['doc-b', 'doc-a'])
+    const result = await requestHostMemoryAdvice(
+      'deploy notes',
+      [
+        { id: 'doc-a', access: 'OWNER' },
+        { id: 'doc-b', access: 'READ' },
+      ],
+      { env: { DOC_LAYA_ENABLED: '1' }, ask }
+    )
+    expect(result.called).toBe(true)
+    expect(result.ranking).toEqual({
+      status: 'suggest',
+      candidates: ['doc-a', 'doc-b'],
+      overlayOrder: ['doc-b', 'doc-a'],
+    })
   })
 })
