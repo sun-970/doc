@@ -282,7 +282,7 @@ export async function listApiDocuments(userId: string, searchParams: URLSearchPa
     documents: orderedDocuments.map((document) => {
       const matchField = query
         ? searchHits
-          ? searchHits.get(document.id) ?? 'content'
+          ? (searchHits.get(document.id) ?? 'content')
           : computeMatchField(document.title, document.contentSearch, query.toLowerCase())
         : undefined
       const access = overlayCandidates.find((candidate) => candidate.id === document.id)?.access
