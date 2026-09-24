@@ -223,7 +223,7 @@ describe('v1 document service', () => {
   test('calls loopback Laya from listApiDocuments when enabled and taskSummary is present', async () => {
     mocks.findMany.mockResolvedValue([metadata])
     const fetchImpl = vi.fn(async () => {
-      return new Response(JSON.stringify({ answers: { rank: { type: 'noul', probability: 0.4 } } }), {
+      return new Response(JSON.stringify({ answers: { 'doc-1': { type: 'score', score: 0.4, confidence: 0.8 } } }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
@@ -245,6 +245,37 @@ describe('v1 document service', () => {
     const body = JSON.parse(String(init.body))
     expect(body.state).toEqual({ ids: ['doc-1'] })
     expect(body.state.content).toBeUndefined()
+  })
+
+  test('reorders listed documents by Laya score and keeps original order when Laya fails', async () => {
+    const second = { ...metadata, id: 'doc-2', title: 'Later', updatedAt: later }
+    mocks.findMany.mockResolvedValue([metadata, second])
+    const fetchImpl = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          answers: {
+            'doc-1': { type: 'score', score: 0.1, confidence: 0.9 },
+            'doc-2': { type: 'score', score: 0.9, confidence: 0.9 },
+          },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    }) as unknown as typeof fetch
+
+    const ranked = await listApiDocuments('user-1', new URLSearchParams({ taskSummary: 'deploy notes' }), {
+      env: { DOC_LAYA_ENABLED: '1' },
+      fetchImpl,
+    })
+    expect(ranked.documents.map((document) => document.id)).toEqual(['doc-2', 'doc-1'])
+
+    const failedFetch = vi.fn(async () => {
+      throw new Error('laya down')
+    }) as unknown as typeof fetch
+    const unranked = await listApiDocuments('user-1', new URLSearchParams({ taskSummary: 'deploy notes' }), {
+      env: { DOC_LAYA_ENABLED: '1' },
+      fetchImpl: failedFetch,
+    })
+    expect(unranked.documents.map((document) => document.id)).toEqual(['doc-1', 'doc-2'])
   })
 
   test('does not call Laya from listApiDocuments when the flag is off', async () => {
