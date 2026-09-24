@@ -2,17 +2,13 @@ export const LAYA_ENDPOINT = 'http://127.0.0.1:18081/v1/systemone'
 
 /** Local Laya remains opt-in so ordinary list reads never acquire inference latency. */
 export function layaEnabled(env: NodeJS.Dict<string> = process.env): boolean {
-  const raw = Object.prototype.hasOwnProperty.call(env, 'DOC_LAYA_ENABLED')
-    ? env.DOC_LAYA_ENABLED
-    : env.DOC_JEV_ENABLED
+  const raw = Object.prototype.hasOwnProperty.call(env, 'DOC_LAYA_ENABLED') ? env.DOC_LAYA_ENABLED : env.DOC_JEV_ENABLED
   const value = raw?.trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes'
 }
 
 export function layaModel(env: NodeJS.Dict<string> = process.env): string {
-  return /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$/.test(env.DOC_LAYA_MODEL ?? '')
-    ? env.DOC_LAYA_MODEL!
-    : 'typed-decisions'
+  return /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$/.test(env.DOC_LAYA_MODEL ?? '') ? env.DOC_LAYA_MODEL! : 'typed-decisions'
 }
 
 export function isLoopbackEndpoint(raw: string): boolean {

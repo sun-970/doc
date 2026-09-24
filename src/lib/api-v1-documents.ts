@@ -169,11 +169,7 @@ function parseStoredContent(content: string) {
   }
 }
 
-export async function listApiDocuments(
-  userId: string,
-  searchParams: URLSearchParams,
-  deps: ListApiDocumentsDeps = {}
-) {
+export async function listApiDocuments(userId: string, searchParams: URLSearchParams, deps: ListApiDocumentsDeps = {}) {
   const limit = parseListLimit(searchParams.get('limit'))
   const starred = parseBooleanQuery(searchParams.get('starred'), 'starred')
   const trash = parseBooleanQuery(searchParams.get('trash'), 'trash') || false
@@ -249,33 +245,29 @@ export async function listApiDocuments(
     return { id: document.id, access: access as HostMemoryAccess }
   })
   const env = deps.env ?? process.env
-  const { ranking: hostMemory } = await requestHostMemoryAdvice(
-    searchParams.get('taskSummary'),
-    overlayCandidates,
-    {
-      env,
-      ask: async (payload) => {
-        await askLaya(
-          {
-            state: payload,
-            questions: {
-              rank: {
-                type: 'noul',
-                instructions: 'Whether these metadata-only document ids are relevant to the confirmed task intent.',
-              },
+  const { ranking: hostMemory } = await requestHostMemoryAdvice(searchParams.get('taskSummary'), overlayCandidates, {
+    env,
+    ask: async (payload) => {
+      await askLaya(
+        {
+          state: payload,
+          questions: {
+            rank: {
+              type: 'noul',
+              instructions: 'Whether these metadata-only document ids are relevant to the confirmed task intent.',
             },
           },
-          { env, fetchImpl: deps.fetchImpl }
-        )
-      },
-    }
-  )
+        },
+        { env, fetchImpl: deps.fetchImpl }
+      )
+    },
+  })
 
   return {
     documents: documents.map((document) => {
       const matchField = query
         ? searchHits
-          ? (searchHits.get(document.id) ?? 'content')
+          ? searchHits.get(document.id) ?? 'content'
           : computeMatchField(document.title, document.contentSearch, query.toLowerCase())
         : undefined
       const access = overlayCandidates.find((candidate) => candidate.id === document.id)?.access

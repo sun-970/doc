@@ -27,7 +27,9 @@ export interface AskLayaDeps {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null
 }
 
 const probability = (value: unknown): value is number =>
@@ -60,7 +62,10 @@ function parseAnswer(value: unknown): LayaAnswer | null {
 }
 
 /** Local typed System One call. It never sends authorization headers or reaches a non-loopback host. */
-export async function askLaya(request: LayaRequest, deps: AskLayaDeps = {}): Promise<Record<string, LayaAnswer> | null> {
+export async function askLaya(
+  request: LayaRequest,
+  deps: AskLayaDeps = {}
+): Promise<Record<string, LayaAnswer> | null> {
   const config = layaRequestConfig(deps.env ?? process.env)
   if (!config) return null
   try {
