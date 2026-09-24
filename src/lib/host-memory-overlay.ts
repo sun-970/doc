@@ -60,15 +60,19 @@ export function assertMetadataOnlyAdvicePayload(payload: Record<string, unknown>
   }
 }
 
-/** Default off. Empty / missing / "0" / "false" stay off. */
-export function hostMemoryJevEnabled(env: NodeJS.Dict<string> = process.env): boolean {
-  const value = env.DOC_JEV_ENABLED?.trim().toLowerCase()
+/** Default off. Empty / missing / "0" / "false" stay off. Prefers DOC_LAYA_ENABLED. */
+export function hostMemoryLayaEnabled(env: NodeJS.Dict<string> = process.env): boolean {
+  const raw = Object.prototype.hasOwnProperty.call(env, 'DOC_LAYA_ENABLED') ? env.DOC_LAYA_ENABLED : env.DOC_JEV_ENABLED
+  const value = raw?.trim().toLowerCase()
   return value === '1' || value === 'true' || value === 'yes'
 }
 
+/** @deprecated Use hostMemoryLayaEnabled. */
+export const hostMemoryJevEnabled = hostMemoryLayaEnabled
+
 export type HostMemoryAsk = (payload: Record<string, unknown>) => Promise<unknown>
 
-/** Live path: missing taskSummary or flag-off never calls Jev. */
+/** Live path: missing taskSummary or flag-off never calls Laya. */
 export async function requestHostMemoryAdvice(
   taskSummary: string | null | undefined,
   candidates: readonly HostMemoryCandidate[],
@@ -76,7 +80,7 @@ export async function requestHostMemoryAdvice(
 ): Promise<{ ranking: HostMemoryRankResult; called: boolean }> {
   const ranking = rankAccessibleDocuments(taskSummary, candidates)
   if (ranking.status === 'abstain') return { ranking, called: false }
-  if (!hostMemoryJevEnabled(deps.env ?? process.env)) return { ranking, called: false }
+  if (!hostMemoryLayaEnabled(deps.env ?? process.env)) return { ranking, called: false }
   const payload: Record<string, unknown> = { ids: ranking.candidates }
   assertMetadataOnlyAdvicePayload(payload)
   if (!deps.ask) return { ranking, called: false }

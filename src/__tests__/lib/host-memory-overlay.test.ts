@@ -3,7 +3,7 @@ import {
   assertMetadataOnlyAdvicePayload,
   filterAccessibleOverlayIds,
   HOST_MEMORY_ABSTAIN_COPY,
-  hostMemoryJevEnabled,
+  hostMemoryLayaEnabled,
   rankAccessibleDocuments,
   requestHostMemoryAdvice,
 } from '@/lib/host-memory-overlay'
@@ -61,12 +61,12 @@ describe('host memory overlay ranking (#86)', () => {
     expect(() => assertMetadataOnlyAdvicePayload({ id: 'doc-a', content: 'secret' })).toThrow(/forbidden keys/)
   })
 
-  it('does not call Jev without a task summary even when the flag is on', async () => {
+  it('does not call Laya without a task summary even when the flag is on', async () => {
     const ask = vi.fn(async () => {
-      throw new Error('jev must not run')
+      throw new Error('laya must not run')
     })
     const result = await requestHostMemoryAdvice(null, [{ id: 'doc-a', access: 'OWNER' }], {
-      env: { DOC_JEV_ENABLED: '1' },
+      env: { DOC_LAYA_ENABLED: '1' },
       ask,
     })
     expect(result.called).toBe(false)
@@ -74,8 +74,8 @@ describe('host memory overlay ranking (#86)', () => {
     expect(ask).not.toHaveBeenCalled()
   })
 
-  it('does not call Jev when DOC_JEV_ENABLED is off', async () => {
-    expect(hostMemoryJevEnabled({})).toBe(false)
+  it('does not call Laya when DOC_LAYA_ENABLED is off', async () => {
+    expect(hostMemoryLayaEnabled({})).toBe(false)
     const ask = vi.fn(async () => null)
     const result = await requestHostMemoryAdvice('deploy notes', [{ id: 'doc-a', access: 'OWNER' }], {
       env: {},
@@ -84,5 +84,15 @@ describe('host memory overlay ranking (#86)', () => {
     expect(result.called).toBe(false)
     expect(result.ranking).toEqual({ status: 'needs_provider', candidates: ['doc-a'] })
     expect(ask).not.toHaveBeenCalled()
+  })
+
+  it('treats DOC_JEV_ENABLED as an alias when DOC_LAYA_ENABLED is unset', async () => {
+    const ask = vi.fn(async () => null)
+    const result = await requestHostMemoryAdvice('deploy notes', [{ id: 'doc-a', access: 'OWNER' }], {
+      env: { DOC_JEV_ENABLED: '1' },
+      ask,
+    })
+    expect(result.called).toBe(true)
+    expect(ask).toHaveBeenCalledWith({ ids: ['doc-a'] })
   })
 })

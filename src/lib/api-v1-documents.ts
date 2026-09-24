@@ -13,6 +13,12 @@ import { extractPlainText } from '@/lib/tiptap-text-extractor'
 import { fullTextSearch, computeMatchField, type MatchField } from '@/lib/doc-search'
 import { DOCUMENT_ACCESS, resolveDocumentAccess } from '@/lib/document-access'
 import { requestHostMemoryAdvice, type HostMemoryAccess } from '@/lib/host-memory-overlay'
+import { askLaya } from '@/lib/laya/client'
+
+export type ListApiDocumentsDeps = {
+  env?: NodeJS.Dict<string>
+  fetchImpl?: typeof fetch
+}
 
 const DEFAULT_LIST_LIMIT = 50
 const MAX_LIST_LIMIT = 100
@@ -163,7 +169,11 @@ function parseStoredContent(content: string) {
   }
 }
 
-export async function listApiDocuments(userId: string, searchParams: URLSearchParams) {
+export async function listApiDocuments(
+  userId: string,
+  searchParams: URLSearchParams,
+  deps: ListApiDocumentsDeps = {}
+) {
   const limit = parseListLimit(searchParams.get('limit'))
   const starred = parseBooleanQuery(searchParams.get('starred'), 'starred')
   const trash = parseBooleanQuery(searchParams.get('trash'), 'trash') || false
@@ -238,7 +248,28 @@ export async function listApiDocuments(userId: string, searchParams: URLSearchPa
     )
     return { id: document.id, access: access as HostMemoryAccess }
   })
-  const { ranking: hostMemory } = await requestHostMemoryAdvice(searchParams.get('taskSummary'), overlayCandidates)
+  const env = deps.env ?? process.env
+  const { ranking: hostMemory } = await requestHostMemoryAdvice(
+    searchParams.get('taskSummary'),
+    overlayCandidates,
+    {
+      env,
+      ask: async (payload) => {
+        await askLaya(
+          {
+            state: payload,
+            questions: {
+              rank: {
+                type: 'noul',
+                instructions: 'Whether these metadata-only document ids are relevant to the confirmed task intent.',
+              },
+            },
+          },
+          { env, fetchImpl: deps.fetchImpl }
+        )
+      },
+    }
+  )
 
   return {
     documents: documents.map((document) => {
