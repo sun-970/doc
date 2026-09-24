@@ -170,7 +170,8 @@ export async function applyContentBinary(
     }
     // Never 409 after a committed write: that forks the live room from the row.
     // Fingerprint mismatch must fail inside persist (before SQL). After rowCount>0,
-    // sync the in-memory room to the committed payload.
+    // sync the in-memory room to the committed payload. Inbound Yjs apply shares
+    // this gate, so a live edit cannot be admitted during the SQL await.
 
     const activeDoc = getDocument(docId)
     if (activeDoc) {

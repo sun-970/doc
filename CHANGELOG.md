@@ -21,6 +21,9 @@ All notable changes to `doc` are documented here.
 
 ### Fixed
 
+- Serialize collab content replace with admitted Hocuspocus load/store/unload and inbound
+  Yjs messages on one per-document gate so a live edit cannot land during the persist SQL
+  window and then be erased by room replace (Refs #82).
 - Persist like identity per viewer using a server-side `PubDocLike` table and cookie-based
   anonymous viewer token. Duplicate likes from the same viewer are now idempotent, cancel
   only succeeds if that viewer holds a like, and counts survive reload across devices.

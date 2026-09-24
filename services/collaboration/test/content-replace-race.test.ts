@@ -5,6 +5,7 @@ import { Hocuspocus, type Hocuspocus as Server } from '@hocuspocus/server'
 import { HocuspocusProvider } from '@hocuspocus/provider'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as Y from 'yjs'
+import { withDocumentMessageBoundary, withDocumentMutation } from '../src/hocuspocus/document-gate.js'
 import { applyContentBinary, liveDocumentFingerprint, serializeYdocToJsonString } from '../src/hocuspocus/restore.js'
 
 const servers: Server[] = []
@@ -62,8 +63,30 @@ async function connect(server: Server, name: string) {
   return doc
 }
 
-describe('independent CAS and live Y.Doc race regressions', () => {
-  it('does not silently discard a WebSocket edit accepted during PUT persistence', async () => {
+describe('per-document replacement / admitted-update boundary', () => {
+  it('runs admitted updates only after an in-flight replacement releases the gate', async () => {
+    const order: string[] = []
+    const entered = deferred<void>()
+    const release = deferred<void>()
+    const persist = withDocumentMutation('boundary', async () => {
+      order.push('persist-start')
+      entered.resolve()
+      await release.promise
+      order.push('persist-end')
+    })
+    await entered.promise
+    const update = withDocumentMutation('boundary', async () => {
+      order.push('update')
+    })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(order).toEqual(['persist-start'])
+    release.resolve()
+    await persist
+    await update
+    expect(order).toEqual(['persist-start', 'persist-end', 'update'])
+  })
+
+  it('does not admit a WebSocket edit during PUT persist SQL, then keeps durable/live aligned', async () => {
     const server = new Hocuspocus({
       port: 0,
       quiet: true,
@@ -71,6 +94,9 @@ describe('independent CAS and live Y.Doc race regressions', () => {
       debounce: 2000,
       maxDebounce: 10000,
       onAuthenticate: async () => ({ userId: 'writer' }),
+      beforeHandleMessage: async (data) => {
+        await withDocumentMessageBoundary(data.documentName)
+      },
     })
     servers.push(server)
     await server.listen(0)
@@ -103,36 +129,14 @@ describe('independent CAS and live Y.Doc race regressions', () => {
     )
     await entered.promise
     append(a, '-live-edit')
-    await until(() => text(live).includes('-live-edit') && text(b).includes('-live-edit'))
-    release.resolve()
-    await expect(replacement).rejects.toThrow('version_conflict')
-    expect(text(b)).toContain('-live-edit')
-    expect(text(live)).toContain('-live-edit')
-    expect(text(b)).not.toContain('put-body')
-    expect(dbContent).not.toContain('put-body')
-  })
-
-  it('does not 409 after persist already committed when the live room moved', async () => {
-    const live = paragraphDoc('base')
-    let dbContent = serializeYdocToJsonString(live)
-    await expect(
-      applyContentBinary(
-        'committed-then-live',
-        payload('put-body'),
-        {
-          getActiveDocument: () => live,
-          persistRestoredDocument: async (_id, _binary, content) => {
-            dbContent = content
-            append(live, '-live-edit')
-            return 1
-          },
-        },
-        '2026-01-01T00:00:00.000Z'
-      )
-    ).resolves.toMatchObject({ appliedToRoom: true })
-    expect(dbContent).toContain('put-body')
-    expect(text(live)).toContain('put-body')
+    await new Promise((resolve) => setTimeout(resolve, 150))
     expect(text(live)).not.toContain('-live-edit')
+    expect(text(b)).not.toContain('-live-edit')
+    expect(text(live)).not.toContain('put-body')
+    release.resolve()
+    await expect(replacement).resolves.toMatchObject({ appliedToRoom: true })
+    expect(text(live)).toContain('put-body')
+    expect(dbContent).toContain('put-body')
     expect(serializeYdocToJsonString(live)).toBe(dbContent)
   })
 

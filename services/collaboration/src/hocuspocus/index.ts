@@ -4,6 +4,7 @@ import {
   Server,
   type afterLoadDocumentPayload,
   type beforeHandleMessagePayload,
+  type beforeUnloadDocumentPayload,
   type fetchPayload,
   type onAuthenticatePayload,
   type onDisconnectPayload,
@@ -25,6 +26,7 @@ import {
   enforceActiveConnectionAccess,
 } from './access-control.js'
 import { basicExts } from './exts.js'
+import { withDocumentMessageBoundary, withDocumentMutation } from './document-gate.js'
 
 export interface CollaborationContext {
   userId: string
@@ -53,17 +55,18 @@ function contextUserId(context: unknown): string {
 // on store document
 export async function onStoreDocument(data: onStoreDocumentPayload): Promise<void> {
   const documentName = data.documentName
+  return withDocumentMutation(documentName, async () => {
+    // update doc json content
+    const json = TiptapTransformer.fromYdoc(data.document, 'default')
+    // console.log('hocuspocus onStoreDocument .... ', data.documentName, json)
+    const jsonStr = JSON.stringify(json)
+    const rowCount = await updateDocJsonStr(documentName, jsonStr)
+    console.log('hocuspocus onStoreDocument updated rowCount: ', rowCount)
 
-  // update doc json content
-  const json = TiptapTransformer.fromYdoc(data.document, 'default')
-  // console.log('hocuspocus onStoreDocument .... ', data.documentName, json)
-  const jsonStr = JSON.stringify(json)
-  const rowCount = await updateDocJsonStr(documentName, jsonStr)
-  console.log('hocuspocus onStoreDocument updated rowCount: ', rowCount)
-
-  // update share relation notice type to 'UPDATE'
-  await updateShareRelationNoticeType(documentName, contextUserId(data.context))
-  if (rowCount > 0) await notifyWebDocumentChangeBestEffort(documentName)
+    // update share relation notice type to 'UPDATE'
+    await updateShareRelationNoticeType(documentName, contextUserId(data.context))
+    if (rowCount > 0) await notifyWebDocumentChangeBestEffort(documentName)
+  })
 }
 
 // on db fetch doc
@@ -71,23 +74,25 @@ export async function dbFetch(
   { documentName }: FetchData,
   deps: Pick<PersistenceDeps, 'getDocById'> = { getDocById }
 ): Promise<Uint8Array | null> {
-  // console.log('Fetch db fetch ... ', documentName)
-  const res = await deps.getDocById(documentName)
-  if (res == null) return null
-  if (res.contentBinary) return res.contentBinary // return binary content if exists
-  if (res.content == null) return null
-  try {
-    // console.log('hocuspocus db fetch res.content ...', res.content)
-    // console.log('basicExts....', basicExts)
-    const bytes = TiptapTransformer.toYdoc(JSON.parse(res.content), 'default', basicExts) // JSON to Yjs doc
-    // console.log('hocuspocus db fetch bytes ...', bytes)
-    const state = Y.encodeStateAsUpdate(bytes) // Yjs doc to binary
-    // console.log('hocuspocus db fetch state ...... ', state)
-    return state
-  } catch (err) {
-    console.log('hocuspocus transform toYdoc error ...', err)
-  }
-  return null
+  return withDocumentMutation(documentName, async () => {
+    // console.log('Fetch db fetch ... ', documentName)
+    const res = await deps.getDocById(documentName)
+    if (res == null) return null
+    if (res.contentBinary) return res.contentBinary // return binary content if exists
+    if (res.content == null) return null
+    try {
+      // console.log('hocuspocus db fetch res.content ...', res.content)
+      // console.log('basicExts....', basicExts)
+      const bytes = TiptapTransformer.toYdoc(JSON.parse(res.content), 'default', basicExts) // JSON to Yjs doc
+      // console.log('hocuspocus db fetch bytes ...', bytes)
+      const state = Y.encodeStateAsUpdate(bytes) // Yjs doc to binary
+      // console.log('hocuspocus db fetch state ...... ', state)
+      return state
+    } catch (err) {
+      console.log('hocuspocus transform toYdoc error ...', err)
+    }
+    return null
+  })
 }
 
 // on db store doc
@@ -95,9 +100,11 @@ export async function dbStore(
   { documentName, state }: StoreData,
   deps: Pick<PersistenceDeps, 'updateDocBinary'> = { updateDocBinary }
 ): Promise<void> {
-  // console.log('hocuspocus db store ... ', documentName, state)
-  const rowContent = await deps.updateDocBinary(documentName, state)
-  console.log('hocuspocus db store updated rowCount: ', rowContent)
+  return withDocumentMutation(documentName, async () => {
+    // console.log('hocuspocus db store ... ', documentName, state)
+    const rowContent = await deps.updateDocBinary(documentName, state)
+    console.log('hocuspocus db store updated rowCount: ', rowContent)
+  })
 }
 
 // on authenticate
@@ -127,22 +134,32 @@ export async function onAuthenticate(
 // Recheck persisted authorization before every message from an established connection. This
 // closes the notification-failure window after a share is revoked or a document is deleted.
 export async function beforeHandleMessage(data: beforeHandleMessagePayload): Promise<DocumentAccess> {
-  return enforceActiveConnectionAccess(adaptHocuspocusMessage(data), {
+  const access = await enforceActiveConnectionAccess(adaptHocuspocusMessage(data), {
     getShareRelationAccess,
     emitAccessEvent: emitCollaborationAccessEvent,
   })
+  await withDocumentMessageBoundary(data.documentName)
+  return access
 }
 
 // 在文档加载完成后登记当前活动房间的 Y.Doc。
 export async function afterLoadDocument(data: afterLoadDocumentPayload): Promise<void> {
-  setActiveDocument(data.documentName, data.document)
+  return withDocumentMutation(data.documentName, async () => {
+    setActiveDocument(data.documentName, data.document)
+  })
 }
 
 // 在最后一个连接断开后清理对应的活动房间映射。
 export async function onDisconnect(data: onDisconnectPayload): Promise<void> {
   if (data.clientsCount === 0) {
-    removeActiveDocument(data.documentName)
+    await withDocumentMutation(data.documentName, async () => {
+      removeActiveDocument(data.documentName)
+    })
   }
+}
+
+export async function beforeUnloadDocument(data: beforeUnloadDocumentPayload): Promise<void> {
+  await withDocumentMutation(data.documentName, async () => undefined)
 }
 
 export const hocuspocusServer = Server.configure({
@@ -151,12 +168,14 @@ export const hocuspocusServer = Server.configure({
   onStoreDocument,
   afterLoadDocument,
   onDisconnect,
+  beforeUnloadDocument,
   extensions: [
     new Logger(),
     new Database({
       fetch: dbFetch, // fetch doc content from db
       store: dbStore, // store doc contentBinary to db
     }),
+    { beforeUnloadDocument },
   ],
 })
 
