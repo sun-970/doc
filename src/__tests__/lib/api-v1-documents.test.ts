@@ -187,6 +187,13 @@ describe('v1 document service', () => {
       access: 'owner',
     })
     expect(result.nextCursor).toEqual(expect.any(String))
+    expect(result.hostMemory).toEqual({
+      status: 'abstain',
+      reason: 'missing_task_intent',
+      copy: 'No confirmed task intent; document ranking abstains.',
+      candidates: [],
+    })
+    expect(mocks.updateMany).not.toHaveBeenCalled()
     expect(mocks.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
@@ -202,6 +209,15 @@ describe('v1 document service', () => {
         take: 2,
       })
     )
+  })
+
+  test('returns host-memory candidates without inventing a ranking when taskSummary is present', async () => {
+    mocks.findMany.mockResolvedValue([metadata])
+
+    const result = await listApiDocuments('user-1', new URLSearchParams({ taskSummary: 'deploy notes' }))
+
+    expect(result.hostMemory).toEqual({ status: 'needs_provider', candidates: ['doc-1'] })
+    expect(mocks.updateMany).not.toHaveBeenCalled()
   })
 
   test('searches document content when query does not match title', async () => {

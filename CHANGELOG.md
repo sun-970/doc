@@ -6,6 +6,8 @@ All notable changes to `doc` are documented here.
 
 ### Added
 
+- #86: Host Memory ranking abstains without a confirmed task intent. Overlay candidates drop `NONE` access via `resolveDocumentAccess`. `GET /api/v1/documents` returns list abstain copy in `meta.hostMemory`. Default advice payload never includes document bodies. Overlay does not change `shareRelations`. Refs #82.
+
 - Migrate the app to Next.js 16.3.5 / React 19.1.2: async `params` via
   `resolveRouteParams`, ESLint 9 flat config, and `serverExternalPackages`.
   No feature re-ships (search, likes, nav, Mailpit stay as on main).
