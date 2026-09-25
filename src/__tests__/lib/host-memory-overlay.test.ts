@@ -87,14 +87,14 @@ describe('host memory overlay ranking (#86)', () => {
     expect(ask).not.toHaveBeenCalled()
   })
 
-  it('treats DOC_JEV_ENABLED as an alias when DOC_LAYA_ENABLED is unset', async () => {
+  it('does not treat DOC_JEV_ENABLED as an alias', async () => {
     const ask = vi.fn(async () => null)
     const result = await requestHostMemoryAdvice('deploy notes', [{ id: 'doc-a', access: 'OWNER' }], {
       env: { DOC_JEV_ENABLED: '1' },
       ask,
     })
-    expect(result.called).toBe(true)
-    expect(ask).toHaveBeenCalledWith({ ids: ['doc-a'] })
+    expect(result.called).toBe(false)
+    expect(ask).not.toHaveBeenCalled()
   })
 
   it('applies Laya overlay order without dropping unmatched items', () => {

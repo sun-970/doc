@@ -8,9 +8,9 @@ describe('laya config', () => {
     expect(layaRequestConfig({})).toBeNull()
   })
 
-  it('accepts DOC_LAYA_ENABLED and keeps DOC_JEV_ENABLED as an alias', () => {
+  it('accepts DOC_LAYA_ENABLED and ignores DOC_JEV_ENABLED', () => {
     expect(layaEnabled({ DOC_LAYA_ENABLED: '1' })).toBe(true)
-    expect(layaEnabled({ DOC_JEV_ENABLED: 'true' })).toBe(true)
+    expect(layaEnabled({ DOC_JEV_ENABLED: 'true' })).toBe(false)
     expect(layaEnabled({ DOC_LAYA_ENABLED: '0', DOC_JEV_ENABLED: '1' })).toBe(false)
   })
 

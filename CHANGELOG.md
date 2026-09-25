@@ -58,7 +58,7 @@ All notable changes to `doc` are documented here.
 
 ### Changed
 
-- Host Memory ranking provider is local Laya (`DOC_LAYA_ENABLED`, `DOC_JEV_ENABLED` alias). `GET /api/v1/documents` calls loopback `POST /v1/systemone` with metadata-only ids when a task summary is present. No API key or Authorization header. Non-loopback URLs are rejected. Overlay still abstains without task intent and never sends document bodies. Refs #86.
+- Host Memory ranking provider is local Laya (`DOC_LAYA_ENABLED` only). `GET /api/v1/documents` calls loopback `POST /v1/systemone` with metadata-only ids when a task summary is present. No API key or Authorization header. Non-loopback URLs are rejected. Overlay still abstains without task intent and never sends document bodies. `DOC_JEV_ENABLED` is not read. Refs #86.
 
 - Replace the remaining user-visible organization copy in the security policy, localized landing
   page, and footers with ByteFolk while retaining the established npm package scopes.

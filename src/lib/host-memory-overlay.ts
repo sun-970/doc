@@ -1,3 +1,5 @@
+import { layaEnabled } from '@/lib/laya/config'
+
 /** Host Memory list ranking (#86). Without a confirmed task intent, abstain. */
 
 export type HostMemoryAccess = 'OWNER' | 'WRITE' | 'READ' | 'NONE'
@@ -61,15 +63,10 @@ export function assertMetadataOnlyAdvicePayload(payload: Record<string, unknown>
   }
 }
 
-/** Default off. Empty / missing / "0" / "false" stay off. Prefers DOC_LAYA_ENABLED. */
+/** Default off. Empty / missing / "0" / "false" stay off. */
 export function hostMemoryLayaEnabled(env: NodeJS.Dict<string> = process.env): boolean {
-  const raw = Object.prototype.hasOwnProperty.call(env, 'DOC_LAYA_ENABLED') ? env.DOC_LAYA_ENABLED : env.DOC_JEV_ENABLED
-  const value = raw?.trim().toLowerCase()
-  return value === '1' || value === 'true' || value === 'yes'
+  return layaEnabled(env)
 }
-
-/** @deprecated Use hostMemoryLayaEnabled. */
-export const hostMemoryJevEnabled = hostMemoryLayaEnabled
 
 export type HostMemoryAsk = (payload: Record<string, unknown>) => Promise<string[] | null>
 
